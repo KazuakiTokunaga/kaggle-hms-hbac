@@ -1,3 +1,6 @@
+# https://www.kaggle.com/code/ttahara/hms-hbac-resnet34d-baseline-training/
+# https://www.kaggle.com/code/ttahara/hms-hbac-resnet34d-baseline-inference
+
 import sys
 import os
 import gc
