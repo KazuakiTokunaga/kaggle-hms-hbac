@@ -60,6 +60,7 @@ class ENV:
 
 class Config:
     batch_size = 64 # 88
+    test_batch_size = 32
     epochs = 20 # 20
     PRECISION = 16    
     PATIENCE = 20    
@@ -408,7 +409,7 @@ def get_test_dls(df_test):
         augmentations = None,
         test = True
     )
-    dl_test = DataLoader(ds_test, batch_size=Config.batch_size , shuffle=False, num_workers = 2)    
+    dl_test = DataLoader(ds_test, batch_size=Config.test_batch_size , shuffle=False, num_workers = 2)    
     return dl_test, ds_test
 
 def predict(data_loader, model, mode='train'):
