@@ -97,6 +97,7 @@ def set_random_seed(seed: int = 42, deterministic: bool = False):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)  # type: ignore
     torch.backends.cudnn.deterministic = deterministic  # type: ignore
+    torch.backends.cudnn.benchmark = False
 
 
 def to_device(
