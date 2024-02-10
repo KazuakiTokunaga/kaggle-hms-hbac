@@ -9,6 +9,8 @@ import random
 import warnings
 import albumentations as A
 import pathlib
+from tqdm import tqdm
+from glob import glob
 from pathlib import Path
 from torch import optim
 from torch.optim.lr_scheduler import OneCycleLR
@@ -22,24 +24,20 @@ from kaggle_kl_div import score
 
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
+from eeg_to_spec import spectrogram_from_eeg
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
-
-logger = Logger()
-TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
-TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
-TARS2 = {x:y for y,x in TARS.items()}
-EFFICIENTNET_SIZE = {"efficientnet_b0": 1280, "efficientnet_b2": 1408, "efficientnet_b4": 1792, "efficientnet_b5": 2048, "efficientnet_b6": 2304, "efficientnet_b7": 2560}
-
 
 class RCFG:
     """実行に関連する設定"""
     RUN_NAME = create_random_id()
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
+    MODEL_PATH = '/content/drive/MyDrive/HMS/model'
     DEBUG = True
     DEBUG_SIZE = 300
+    PREDICT = True
 
 class ENV:
     """実行環境に関連する設定"""
@@ -56,6 +54,13 @@ class CFG:
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = True
+
+logger = Logger()
+TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
+TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
+TARS2 = {x:y for y,x in TARS.items()}
+EFFICIENTNET_SIZE = {"efficientnet_b0": 1280, "efficientnet_b2": 1408, "efficientnet_b4": 1792, "efficientnet_b5": 2048, "efficientnet_b6": 2304, "efficientnet_b7": 2560}
+MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_efficientnet_b0.pickle" for k in range(2)]
 
 
 class HMSDataset(Dataset):
@@ -104,7 +109,7 @@ class HMSDataset(Dataset):
 
         for k in range(4):
             # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs[row.spec_id][r:r+300,k*100:(k+1)*100].T
+            img = self.specs[row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
 
             # LOG TRANSFORM SPECTROGRAM
             img = np.clip(img,np.exp(-4),np.exp(8))
@@ -228,6 +233,23 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     return model,np.mean(train_loss),np.mean(valid_loss),cv
 
 
+def inference_function(test_loader, model, device):
+    model.eval()
+    softmax = nn.Softmax(dim=1)
+    prediction_dict = {}
+    preds = []
+    with tqdm(test_loader, unit="test_batch", desc='Inference') as tqdm_test_loader:
+        for step, X in enumerate(tqdm_test_loader):
+            X = X.to(device)
+            with torch.no_grad():
+                y_preds = model(X)
+            y_preds = softmax(y_preds)
+            preds.append(y_preds.to('cpu').numpy()) 
+                
+    prediction_dict["predictions"] = np.concatenate(preds) 
+    return prediction_dict
+
+
 ######################################################
 # Runner
 ######################################################
@@ -266,10 +288,9 @@ class Runner():
     def load_dataset(self, ):
         
         df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
-        TARGETS = df.columns[-6:]
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-        train.columns = ['spec_id','min']
+        train.columns = ['spectrogram_id','min']
 
         tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_label_offset_seconds':'max'})
@@ -381,9 +402,74 @@ class Runner():
         self.sheet.write(data, sheet_name='cv_scores')
 
 
+    def inference(self, ):
+        
+        logger.info('Start inference.')
+        test_df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
+
+        paths_spectrograms = glob(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
+        logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
+        all_spectrograms = {}
+
+        for file_path in tqdm(paths_spectrograms):
+            aux = pd.read_parquet(file_path)
+            name = int(file_path.split("/")[-1].split('.')[0])
+            all_spectrograms[name] = aux.iloc[:,1:].values
+            del aux
+
+        paths_eegs = glob(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
+        logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
+        all_eegs = {}
+        counter = 0
+
+        for file_path in tqdm(paths_eegs):
+            eeg_id = file_path.split("/")[-1].split(".")[0]
+            eeg_spectrogram = spectrogram_from_eeg(file_path, counter < 1)
+            all_eegs[int(eeg_id)] = eeg_spectrogram
+            counter += 1
+
+        test_dataset = HMSDataset(
+            data = test_df, 
+            specs = all_spectrograms,
+            eeg_specs = all_eegs,
+            mode="test"
+        )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=CFG.BATCH_SIZE,
+            shuffle=False,
+            num_workers=0, 
+            pin_memory=True, 
+            drop_last=False
+        )
+
+        predictions = []
+        for model_weight in MODEL_FILES:
+            model = HMSModel()
+            checkpoint = torch.load(model_weight)
+            model.load_state_dict(checkpoint)
+            model.to(torch.device(RCFG.DEVICE))
+            prediction_dict = inference_function(test_loader, model, torch.device(RCFG.DEVICE))
+            predictions.append(prediction_dict["predictions"])
+            torch.cuda.empty_cache()
+            gc.collect()
+            
+        predictions = np.array(predictions)
+        predictions = np.mean(predictions, axis=0)
+
+        sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
+        sub[TARGETS] = predictions
+        sub.to_csv('submission.csv',index=False)
+        
+        sub_value = str(sub.to_dict('record'))
+        logger.info(f"submission_csv: {sub_value}")
+
     def main(self):
         self.load_dataset()
         self.run_train()
 
         if ENV.save_to_sheet:
             self.write_sheet()
+        
+        if RCFG.PREDICT:
+            self.inference()
