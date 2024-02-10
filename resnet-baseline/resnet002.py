@@ -258,7 +258,7 @@ class Runner():
     
     def load_dataset(self, ):
         
-        df = pd.read_csv(RCFG.ROOT_PATH + '/train.csv')
+        df = pd.read_csv(RCFG.ROOT_PATH + 'input/hms-harmful-brain-activity-classification/train.csv')
         TARGETS = df.columns[-6:]
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
@@ -289,8 +289,8 @@ class Runner():
         print('Train non-overlapp eeg_id shape:', train.shape )
 
         # READ ALL SPECTROGRAMS
-        self.spectrograms = np.load(RCFG.ROOT_PATH  + '/specs.npy',allow_pickle=True).item()
-        self.all_eegs = np.load(RCFG.ROOT_PATH + '/eeg_specs.npy',allow_pickle=True).item()
+        self.spectrograms = np.load(RCFG.ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(RCFG.ROOT_PATH + '/input/data/eeg_specs.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
