@@ -35,7 +35,7 @@ class RCFG:
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     MODEL_PATH = '/content/drive/MyDrive/HMS/model'
-    DEBUG = False
+    DEBUG = True
     DEBUG_SIZE = 300
     PREDICT = False
 
@@ -55,7 +55,7 @@ class CFG:
     BATCH_SIZE = 32
     AUGMENT = False
 
-logger = Logger()
+logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME)
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
@@ -68,7 +68,7 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b7": 2560
 }
 
-MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(2)]
+MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_{CFG.MODEL_NAME}_{RCFG.RUN_NAME}.pickle" for k in range(2)]
 
 class HMSDataset(Dataset):
     def __init__(
@@ -285,6 +285,7 @@ class Runner():
 
         if RCFG.DEBUG:
             logger.info('DEBUG MODE: Decrease N_SPLITS, EPOCHS, BATCH_SIZE.')
+            RCFG.RUN_NAME = 'debug'
             CFG.N_SPLITS = 2
             CFG.EPOCHS = 2
             CFG.BATCH_SIZE = 8
@@ -367,6 +368,9 @@ class Runner():
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
+            best_valid_loss = np.inf
+            best_cv = np.inf
+            best_epoch = 0
             for epoch in range(CFG.EPOCHS):
                 model, tr_loss, val_loss, cv = train_model(
                     model, 
@@ -379,10 +383,13 @@ class Runner():
                 # エポックごとのログを出力
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
-                if epoch == CFG.EPOCHS-1:
-                    logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} = {cv}')
+                if val_loss < best_valid_loss:
+                    best_epoch = epoch
+                    best_cv = cv
+                    best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
-                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{fold_id}_{CFG.MODEL_NAME}.pickle')
+                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{fold_id}_{CFG.MODEL_NAME}_{RCFG.RUN_NAME}.pickle')    
+            logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
 
             del model
             gc.collect()

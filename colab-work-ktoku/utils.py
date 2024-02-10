@@ -12,11 +12,11 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 class Logger:
 
-    def __init__(self, log_path=''):
+    def __init__(self, log_path='', filename_suffix='exp'):
         self.general_logger = logging.getLogger('general')
         stream_handler = logging.StreamHandler()
         self.general_logger.propagate = False
-        file_general_handler = logging.FileHandler(f'{log_path}general.log')
+        file_general_handler = logging.FileHandler(f'{log_path}general_{filename_suffix}.log')
         for h in self.general_logger.handlers[:]:
             self.general_logger.removeHandler(h)
             h.close()
