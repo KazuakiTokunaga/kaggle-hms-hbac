@@ -7,7 +7,6 @@ import numpy as np
 import typing as tp
 import random
 import torch
-from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
 from oauth2client.service_account import ServiceAccountCredentials
 
 
@@ -69,6 +68,9 @@ def class_vars_to_dict(cls):
 
 
 def print_gpu_utilization(logger):
+    
+    from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo
+
     nvmlInit()
     handle = nvmlDeviceGetHandleByIndex(0)
     info = nvmlDeviceGetMemoryInfo(handle)
