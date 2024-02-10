@@ -239,10 +239,8 @@ def inference_function(test_loader, model, device):
     prediction_dict = {}
     preds = []
     with tqdm(test_loader, unit="test_batch", desc='Inference') as tqdm_test_loader:
-        for step, (X, y) in enumerate(tqdm_test_loader):
+        for step, X in enumerate(tqdm_test_loader):
             X = X.to(device)
-            y = y.to(device)
-            batch_size = y.size(0)
             with torch.no_grad():
                 y_preds = model(X)
             y_preds = softmax(y_preds)
@@ -439,7 +437,9 @@ class Runner():
             test_dataset,
             batch_size=CFG.BATCH_SIZE,
             shuffle=False,
-            num_workers=0, pin_memory=True, drop_last=False
+            num_workers=0, 
+            pin_memory=True, 
+            drop_last=False
         )
 
         predictions = []
@@ -459,8 +459,9 @@ class Runner():
         sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
         sub[TARGETS] = predictions
         sub.to_csv('submission.csv',index=False)
-        sub.head()
-
+        
+        sub_value = sub.to_dict('record')
+        logger.info(f"submission_csv: {sub_value}")
 
     def main(self):
         self.load_dataset()
