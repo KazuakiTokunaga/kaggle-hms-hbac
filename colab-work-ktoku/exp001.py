@@ -12,7 +12,7 @@ import pathlib
 from pathlib import Path
 from torch import optim
 from torch.optim.lr_scheduler import OneCycleLR
-from sklearn.model_selection import KFold, GroupKFold
+from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
 
@@ -295,6 +295,14 @@ class Runner():
         self.train = train.reset_index()
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
+        # Create Fold
+        sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
+        self.train["fold"] = -1
+        for fold_id, (_, val_idx) in enumerate(
+            sgkf.split(self.train, y=self.train["expert_consensus"], groups=self.train["patient_id"])
+        ):
+            self.train.loc[val_idx, "fold"] = fold_id
+
         # READ ALL SPECTROGRAMS
         logger.info('Loading spectrograms specs.py')
         self.spectrograms = np.load(RCFG.ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
@@ -304,9 +312,12 @@ class Runner():
 
     def run_train(self, ):
 
-        gkf = GroupKFold(n_splits=CFG.N_SPLITS)
-        for i, (train_index, valid_index) in enumerate(gkf.split(self.train, self.train.target, self.train.patient_id)):
-            logger.info(f'###################################### Fold {i+1}')
+        for fold_id in self.folds:
+
+            logger.info(f'###################################### Fold {fold_id+1}')
+            train_index = self.train[self.train.fold != fold_id].index
+            valid_index = self.train[self.train.fold == fold_id].index
+            
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
@@ -344,8 +355,8 @@ class Runner():
 
                 if epoch == CFG.EPOCHS-1:
                     logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} = {cv}')
-                    self.info['fold_cv'][i] = cv
-                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_{CFG.MODEL_NAME}.pickle')
+                    self.info['fold_cv'][fold_id] = cv
+                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
             del model
             gc.collect()
