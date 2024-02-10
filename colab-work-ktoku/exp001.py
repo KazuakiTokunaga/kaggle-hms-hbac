@@ -41,7 +41,7 @@ class RCFG:
 
 class ENV:
     """実行環境に関連する設定"""
-    env = "kaggle"
+    env = "colab" # Kaggle, colab
     commit_hash = ""
     save_to_sheet = True
     sheet_json_key = RCFG.ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
