@@ -60,7 +60,7 @@ TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "ot
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
 EFFICIENTNET_SIZE = {"efficientnet_b0": 1280, "efficientnet_b2": 1408, "efficientnet_b4": 1792, "efficientnet_b5": 2048, "efficientnet_b6": 2304, "efficientnet_b7": 2560}
-MODEL_FILES =[RCFG.MODEL_PATH + f"fold{k}_efficientnet_b0.pickle" for k in range(2)]
+MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_efficientnet_b0.pickle" for k in range(2)]
 
 
 class HMSDataset(Dataset):
@@ -109,7 +109,7 @@ class HMSDataset(Dataset):
 
         for k in range(4):
             # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs[row.spec_id][r:r+300,k*100:(k+1)*100].T
+            img = self.specs[row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
 
             # LOG TRANSFORM SPECTROGRAM
             img = np.clip(img,np.exp(-4),np.exp(8))
@@ -292,7 +292,7 @@ class Runner():
         df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-        train.columns = ['spec_id','min']
+        train.columns = ['spectrogram_id','min']
 
         tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_label_offset_seconds':'max'})
@@ -447,8 +447,8 @@ class Runner():
             model = HMSModel()
             checkpoint = torch.load(model_weight)
             model.load_state_dict(checkpoint)
-            model.to(torch.device(CFG.DEVICE))
-            prediction_dict = inference_function(test_loader, model, torch.device(CFG.DEVICE))
+            model.to(torch.device(RCFG.DEVICE))
+            prediction_dict = inference_function(test_loader, model, torch.device(RCFG.DEVICE))
             predictions.append(prediction_dict["predictions"])
             torch.cuda.empty_cache()
             gc.collect()
