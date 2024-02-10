@@ -12,7 +12,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 class Logger:
 
-    def __init__(self, log_path='', filename_suffix='exp'):
+    def __init__(self, log_path='', filename_suffix='exp', debug=False):
         self.general_logger = logging.getLogger('general')
         stream_handler = logging.StreamHandler()
         self.general_logger.propagate = False
@@ -22,7 +22,8 @@ class Logger:
             h.close()
         if len(self.general_logger.handlers) == 0:
             self.general_logger.addHandler(stream_handler)
-            self.general_logger.addHandler(file_general_handler)
+            if not debug:
+                self.general_logger.addHandler(file_general_handler)
             self.general_logger.setLevel(logging.INFO)
 
     def info(self, message):

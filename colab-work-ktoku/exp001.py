@@ -56,7 +56,6 @@ class CFG:
     AUGMENT = False
 
 RCFG.RUN_NAME = create_random_id()
-logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME)
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
@@ -265,6 +264,8 @@ class Runner():
     def __init__(self, commit_hash=""):
 
         set_random_seed()
+        global logger
+        logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME, debug=RCFG.DEBUG)
         logger.info(f'Initializing Runner.　Run Name: {RCFG.RUN_NAME}')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
@@ -388,7 +389,8 @@ class Runner():
                     best_cv = cv
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
-                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
+                    if not RCFG.DEBUG:
+                        torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
             del model
