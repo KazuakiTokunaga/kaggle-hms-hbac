@@ -25,31 +25,34 @@ from utils import WriteSheet, Logger, class_vars_to_dict
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+
 logger = Logger()
+TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
+TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
+TARS2 = {x:y for y,x in TARS.items()}
+
 
 class RCFG:
+    """実行に関連する設定"""
+    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    ROOT_PATH = '/content/drive/MyDrive/HMS'
     DEBUG = True
-    DEBUG_SIZE = 100
+    DEBUG_SIZE = 300
 
 class ENV:
-    on_kaggle = True
+    """実行環境に関連する設定"""
+    env = "kaggle"
     commit_hash = ""
     save_to_sheet = True
-    sheet_json_key = '/kaggle/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    sheet_json_key = RCFG.ROOT_PATH + 'input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
 
 class CFG:
-    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    ROOT_PATH = '/content/drive/MyDrive/HMS'
+    """モデルに関連する設定"""
     EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = True
-
-
-TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
-TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
-TARS2 = {x:y for y,x in TARS.items()}
 
 
 class EfficentNetDataset(Dataset):
@@ -192,7 +195,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     model.train()
     train_loss = []
     for inputs, labels in train_loader:
-        inputs, labels = inputs.to(CFG.DEVICE), labels.to(CFG.DEVICE)
+        inputs, labels = inputs.to(RCFG.DEVICE), labels.to(RCFG.DEVICE)
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(log_softmax(outputs, dim = 1), labels)
@@ -210,7 +213,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     with torch.no_grad():
         for inputs, labels in valid_loader:
             true.append(labels)
-            inputs, labels = inputs.to(CFG.DEVICE), labels.to(CFG.DEVICE)
+            inputs, labels = inputs.to(RCFG.DEVICE), labels.to(RCFG.DEVICE)
             outputs = model(inputs)
             loss = criterion(log_softmax(outputs, dim = 1), labels)
             valid_loss.append(loss.item())
@@ -221,15 +224,22 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     return model,np.mean(train_loss),np.mean(valid_loss),cv
 
 
+######################################################
+# Runner
+######################################################
+
+
 class Runner():
-    def __init__(self,):
+    def __init__(self, commit_hash=""):
 
         set_random_seed()
         logger.info('Initializing Runner.')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
+
+        ENV.commit_hash=commit_hash
         
-        if ENV.on_kaggle:
+        if ENV.env == "kaggle":
             from kaggle_secrets import UserSecretsClient
             self.user_secrets = UserSecretsClient()
 
@@ -248,7 +258,7 @@ class Runner():
     
     def load_dataset(self, ):
         
-        df = pd.read_csv(CFG.ROOT_PATH + '/train.csv')
+        df = pd.read_csv(RCFG.ROOT_PATH + '/train.csv')
         TARGETS = df.columns[-6:]
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
@@ -273,14 +283,14 @@ class Runner():
         train['target'] = tmp
 
         if RCFG.DEBUG:
-            train = train.iloc[:200]
+            train = train.iloc[:RCFG.DEBUG_SIZE]
 
         self.train = train.reset_index()
         print('Train non-overlapp eeg_id shape:', train.shape )
 
         # READ ALL SPECTROGRAMS
-        self.spectrograms = np.load(CFG.ROOT_PATH  + '/specs.npy',allow_pickle=True).item()
-        self.all_eegs = np.load(CFG.ROOT_PATH + '/eeg_specs.npy',allow_pickle=True).item()
+        self.spectrograms = np.load(RCFG.ROOT_PATH  + '/specs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(RCFG.ROOT_PATH + '/eeg_specs.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
@@ -305,7 +315,7 @@ class Runner():
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
             # モデルの構築
-            model = CustomEfficientNet().to(CFG.DEVICE)
+            model = CustomEfficientNet().to(RCFG.DEVICE)
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=4, eta_min=1e-4)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
@@ -323,7 +333,11 @@ class Runner():
                 # エポックごとのログを出力
                 print(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
                 print('CV Score KL-Div for EfficientNetB2 =',cv)
-                torch.save(model.state_dict(), CFG.ROOT_PATH + f'/model/fold{i}_Eff_net_snapshot_epoch_{epoch}.pickle')
+                torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_Eff_net_snapshot_epoch_{epoch}.pickle')
             del model
             gc.collect()
             torch.cuda.empty_cache()
+
+    def main(self):
+        self.load_dataset()
+        self.run_train()
