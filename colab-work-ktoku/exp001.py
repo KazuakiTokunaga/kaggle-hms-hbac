@@ -68,7 +68,7 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b7": 2560
 }
 
-MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_{CFG.MODEL_NAME}_{RCFG.RUN_NAME}.pickle" for k in range(2)]
+MODEL_FILES =[RCFG.MODEL_PATH + f"/{RCFG.RUN_NAME}_fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(2)]
 
 class HMSDataset(Dataset):
     def __init__(
@@ -388,7 +388,7 @@ class Runner():
                     best_cv = cv
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
-                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{fold_id}_{CFG.MODEL_NAME}_{RCFG.RUN_NAME}.pickle')    
+                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
 
             del model
