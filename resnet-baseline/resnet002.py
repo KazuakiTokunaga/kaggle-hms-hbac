@@ -17,7 +17,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
 
 import sys
-sys.path.append('/content/drive/MyDrive/HMS')
+sys.path.append('/content/drive/MyDrive/HMS/input/kaggle-kl-div')
 from kaggle_kl_div import score
 
 from utils import set_random_seed, to_device
