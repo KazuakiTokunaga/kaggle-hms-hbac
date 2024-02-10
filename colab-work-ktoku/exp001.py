@@ -35,9 +35,9 @@ class RCFG:
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     MODEL_PATH = '/content/drive/MyDrive/HMS/model'
-    DEBUG = True
+    DEBUG = False
     DEBUG_SIZE = 300
-    PREDICT = True
+    PREDICT = False
 
 class ENV:
     """実行環境に関連する設定"""
@@ -49,8 +49,8 @@ class ENV:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
-    EPOCHS = 4
+    MODEL_NAME = 'resnet34d'
+    EPOCHS = 9
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = False
@@ -67,8 +67,8 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b6": 2304, 
     "efficientnet_b7": 2560
 }
-MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_efficientnet_b0.pickle" for k in range(2)]
 
+MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(2)]
 
 class HMSDataset(Dataset):
     def __init__(
