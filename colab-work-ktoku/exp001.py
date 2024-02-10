@@ -34,6 +34,7 @@ TARS2 = {x:y for y,x in TARS.items()}
 
 class RCFG:
     """実行に関連する設定"""
+    RUN_NAME = 'exp001'
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     DEBUG = True
@@ -49,13 +50,14 @@ class ENV:
 
 class CFG:
     """モデルに関連する設定"""
+    MODEL_NAME = 'efficientnet_b2'
     EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = True
 
 
-class EfficentNetDataset(Dataset):
+class HMSDataset(Dataset):
     def __init__(
         self, 
         data, 
@@ -163,11 +165,11 @@ class CustomInputTransform(nn.Module):
 
         return x
 
-class CustomEfficientNet(nn.Module):
+class HMSModel(nn.Module):
     def __init__(self, num_classes=6):
-        super(CustomEfficientNet, self).__init__()
+        super(HMSModel, self).__init__()
         self.input_transform = CustomInputTransform(use_kaggle=True, use_eeg=True)
-        self.base_model = timm.create_model('efficientnet_b0', pretrained=True, num_classes=0, in_chans=3)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=0, in_chans=3)
 
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(in_features=1280, out_features=num_classes) #1280 #1408 #1792
@@ -236,6 +238,7 @@ class Runner():
         logger.info('Initializing Runner.')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
+        self.info['fold_cv'] = []
 
         logger.info(f'commit_hash: {commit_hash}')
         ENV.commit_hash=commit_hash
@@ -302,14 +305,14 @@ class Runner():
         for i, (train_index, valid_index) in enumerate(gkf.split(self.train, self.train.target, self.train.patient_id)):
             logger.info(f'###################################### Fold {i+1}')
             # データローダーの作成
-            train_dataset = EfficentNetDataset(
+            train_dataset = HMSDataset(
                 self.train.iloc[train_index],
                 self.spectrograms, 
                 self.all_eegs,
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
-            valid_dataset = EfficentNetDataset(
+            valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
                 self.spectrograms, 
                 self.all_eegs,
@@ -318,7 +321,7 @@ class Runner():
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
             # モデルの構築
-            model = CustomEfficientNet().to(RCFG.DEVICE)
+            model = HMSModel().to(RCFG.DEVICE)
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=4, eta_min=1e-4)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
@@ -335,12 +338,38 @@ class Runner():
                 )
                 # エポックごとのログを出力
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
-                logger.info(f'CV Score KL-Div for EfficientNetB2 = {cv}')
-                torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_Eff_net_snapshot_epoch_{epoch}.pickle')
+
+                if epoch == CFG.EPOCHS-1:
+                    logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} = {cv}')
+                    self.info['fold_cv'].append(cv)
+                    torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_{CFG.MODEL_NAME}.pickle')
+
             del model
             gc.collect()
             torch.cuda.empty_cache()
 
+
+    def write_sheet(self, ):
+        logger.info('Write info to google sheet.')
+        write_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
+
+        data = [
+            RCFG.RUN_NAME,
+            self.info['start_dt_jst'],
+            write_dt_jst,
+            ENV.commit_hash,
+            class_vars_to_dict(RCFG),
+            class_vars_to_dict(CFG),
+            *self.info['fold_cv'],
+            np.mean(self.info['fold_cv'])
+        ]
+    
+        self.sheet.write(data, sheet_name='cv_scores')
+
+
     def main(self):
         self.load_dataset()
         self.run_train()
+
+        if ENV.save_to_sheet:
+            self.write_sheet()
