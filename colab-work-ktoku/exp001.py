@@ -312,7 +312,7 @@ class Runner():
 
     def run_train(self, ):
 
-        for fold_id in self.folds:
+        for fold_id in range(CFG.N_SPLITS):
 
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
