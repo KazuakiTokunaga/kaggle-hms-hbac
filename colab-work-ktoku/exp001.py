@@ -30,6 +30,7 @@ logger = Logger()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
+EFFICIENTNET_SIZE = {"efficientnet_b0": 1280, "efficientnet_b2": 1408, "efficientnet_b4": 1792, "efficientnet_b5": 2048, "efficientnet_b6": 2304, "efficientnet_b7": 2560}
 
 
 class RCFG:
@@ -50,7 +51,7 @@ class ENV:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b2'
+    MODEL_NAME = 'efficientnet_b0'
     EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
@@ -172,7 +173,8 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=0, in_chans=3)
 
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(in_features=1408, out_features=num_classes) #1280 #1408 #1792
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
         self.base_model.classifier = self.fc
 
     def forward(self, x):
