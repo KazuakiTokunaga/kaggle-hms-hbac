@@ -65,12 +65,7 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b4": 1792, 
     "efficientnet_b5": 2048, 
     "efficientnet_b6": 2304, 
-    "efficientnet_b7": 2560,
-    "resnet34d": 512,
-    "resnet50d": 2048,
-    "resnet101d": 2048,
-    "resnet152d": 2048,
-    "resnext200d": 2048
+    "efficientnet_b7": 2560
 }
 MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_efficientnet_b0.pickle" for k in range(2)]
 
@@ -185,12 +180,12 @@ class HMSModel(nn.Module):
     def __init__(self, num_classes=6):
         super(HMSModel, self).__init__()
         self.input_transform = CustomInputTransform(use_kaggle=True, use_eeg=True)
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=0, in_chans=3)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=num_classes, in_chans=3)
 
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = self.input_transform(x)
