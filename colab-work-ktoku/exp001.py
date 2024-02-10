@@ -35,7 +35,7 @@ class RCFG:
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     MODEL_PATH = '/content/drive/MyDrive/HMS/model'
-    DEBUG = True
+    DEBUG = False
     DEBUG_SIZE = 300
     PREDICT = False
 
@@ -55,7 +55,7 @@ class CFG:
     BATCH_SIZE = 32
     AUGMENT = False
 
-RCFG.RUN_NAME = create_random_id() if not RCFG.DEBUG else 'debug'
+RCFG.RUN_NAME = create_random_id()
 logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME)
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
@@ -286,7 +286,6 @@ class Runner():
 
         if RCFG.DEBUG:
             logger.info('DEBUG MODE: Decrease N_SPLITS, EPOCHS, BATCH_SIZE.')
-            RCFG.RUN_NAME = 'debug'
             CFG.N_SPLITS = 2
             CFG.EPOCHS = 2
             CFG.BATCH_SIZE = 8
