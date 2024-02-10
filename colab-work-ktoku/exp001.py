@@ -237,6 +237,7 @@ class Runner():
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
 
+        logger.info(f'commit_hash: {commit_hash}')
         ENV.commit_hash=commit_hash
         
         if ENV.env == "kaggle":
