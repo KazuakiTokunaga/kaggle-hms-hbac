@@ -218,8 +218,8 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
         loss.backward()
         optimizer.step()
         train_loss.append(loss.item())
-        if RCFG.DEBUG:
-            logger.info(f'train_loss: {loss.item()}')
+        # if RCFG.DEBUG:
+        #     logger.info(f'train_loss: {loss.item()}')
     scheduler.step()
     # 検証ループ
     model.eval()
