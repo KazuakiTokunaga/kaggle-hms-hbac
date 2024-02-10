@@ -15,6 +15,7 @@ class Logger:
     def __init__(self, log_path=''):
         self.general_logger = logging.getLogger('general')
         stream_handler = logging.StreamHandler()
+        self.general_logger.propagate = False
         file_general_handler = logging.FileHandler(f'{log_path}general.log')
         for h in self.general_logger.handlers[:]:
             self.general_logger.removeHandler(h)
@@ -116,3 +117,7 @@ def to_device(
             k: t.to(device, *args, **kwargs) for k, t in tensors.items()}
     else:
         return tensors.to(device, *args, **kwargs)
+    
+def create_random_id(length=7):
+    """長さlengthの無作為なアルファベットの文字列を作成する"""
+    return ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=length))
