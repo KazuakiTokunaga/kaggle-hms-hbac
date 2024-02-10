@@ -53,13 +53,25 @@ class CFG:
     EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
-    AUGMENT = True
+    AUGMENT = False
 
 logger = Logger()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
-EFFICIENTNET_SIZE = {"efficientnet_b0": 1280, "efficientnet_b2": 1408, "efficientnet_b4": 1792, "efficientnet_b5": 2048, "efficientnet_b6": 2304, "efficientnet_b7": 2560}
+EFFICIENTNET_SIZE = {
+    "efficientnet_b0": 1280, 
+    "efficientnet_b2": 1408, 
+    "efficientnet_b4": 1792, 
+    "efficientnet_b5": 2048, 
+    "efficientnet_b6": 2304, 
+    "efficientnet_b7": 2560,
+    "resnet34d": 512,
+    "resnet50d": 2048,
+    "resnet101d": 2048,
+    "resnet152d": 2048,
+    "resnext200d": 2048
+}
 MODEL_FILES =[RCFG.MODEL_PATH + f"/fold{k}_efficientnet_b0.pickle" for k in range(2)]
 
 
@@ -132,7 +144,7 @@ class HMSDataset(Dataset):
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        return X,y
+        return X,y # (128,256,8), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -150,32 +162,23 @@ class CustomInputTransform(nn.Module):
 
     def forward(self, x): 
         # x: (batch_size, 128, 256, 8)
-        # Kaggleスペクトログラム
-        print('x', x.shape)
         if self.use_kaggle:
-            x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 128, 256, 4)
-            print('x1', x1.shape)
+            x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         # EEGスペクトログラム
         if self.use_eeg:
-            x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 128, 256, 4)
-            print('x2', x2.shape)
+            x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         # 結合
         if self.use_kaggle and self.use_eeg:
-            x = torch.cat([x1, x2], dim=2) # (batch_size, 128, 512, 4)
-            print('x', x.shape)
+            x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
         elif self.use_eeg:
             x = x2
         else:
             x = x1
 
-        # 3チャンネルに複製
-        x = x.repeat(1, 1, 1, 3) # (batch_size, 128, 512, 12)
-        print('x', x.shape)
-        x = x.permute(0, 3, 1, 2) # (batch_size, 12, 128, 512)
-        print('final x', x.shape)
-
+        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 512, 3)
+        x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 512)
         return x
 
 class HMSModel(nn.Module):
@@ -218,8 +221,8 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
         loss.backward()
         optimizer.step()
         train_loss.append(loss.item())
-        # if RCFG.DEBUG:
-        #     logger.info(f'train_loss: {loss.item()}')
+        if RCFG.DEBUG:
+            logger.info(f'train_loss: {loss.item()}')
     scheduler.step()
     # 検証ループ
     model.eval()
