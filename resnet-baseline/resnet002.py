@@ -334,7 +334,7 @@ class Runner():
                 )
                 # エポックごとのログを出力
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
-                logger.info('CV Score KL-Div for EfficientNetB2 =',cv)
+                logger.info(f'CV Score KL-Div for EfficientNetB2 = {cv}')
                 torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_Eff_net_snapshot_epoch_{epoch}.pickle')
             del model
             gc.collect()
