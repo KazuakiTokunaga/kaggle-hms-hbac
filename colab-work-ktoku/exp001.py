@@ -148,26 +148,33 @@ class CustomInputTransform(nn.Module):
         self.use_kaggle = use_kaggle
         self.use_eeg = use_eeg
 
-    def forward(self, x):
+    def forward(self, x): 
+        # x: (batch_size, 128, 256, 8)
         # Kaggleスペクトログラム
+        print('x', x.shape)
         if self.use_kaggle:
-            x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1)
+            x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 128, 256, 4)
+            print('x1', x1.shape)
 
         # EEGスペクトログラム
         if self.use_eeg:
-            x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1)
+            x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 128, 256, 4)
+            print('x2', x2.shape)
 
         # 結合
         if self.use_kaggle and self.use_eeg:
-            x = torch.cat([x1, x2], dim=2)
+            x = torch.cat([x1, x2], dim=2) # (batch_size, 128, 512, 4)
+            print('x', x.shape)
         elif self.use_eeg:
             x = x2
         else:
             x = x1
 
         # 3チャンネルに複製
-        x = x.repeat(1, 1, 1, 3)
-        x = x.permute(0, 3, 1, 2)
+        x = x.repeat(1, 1, 1, 3) # (batch_size, 128, 512, 12)
+        print('x', x.shape)
+        x = x.permute(0, 3, 1, 2) # (batch_size, 12, 128, 512)
+        print('final x', x.shape)
 
         return x
 
