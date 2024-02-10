@@ -16,7 +16,8 @@ class Logger:
         self.general_logger = logging.getLogger('general')
         stream_handler = logging.StreamHandler()
         self.general_logger.propagate = False
-        file_general_handler = logging.FileHandler(f'{log_path}general_{filename_suffix}.log')
+        if not debug:
+            file_general_handler = logging.FileHandler(f'{log_path}general_{filename_suffix}.log')
         for h in self.general_logger.handlers[:]:
             self.general_logger.removeHandler(h)
             h.close()
