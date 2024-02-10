@@ -31,7 +31,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
 class RCFG:
     """実行に関連する設定"""
-    RUN_NAME = create_random_id()
+    RUN_NAME = ""
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     MODEL_PATH = '/content/drive/MyDrive/HMS/model'
@@ -55,6 +55,7 @@ class CFG:
     BATCH_SIZE = 32
     AUGMENT = False
 
+RCFG.RUN_NAME = create_random_id() if not RCFG.DEBUG else 'debug'
 logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME)
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
@@ -389,7 +390,7 @@ class Runner():
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
                     torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
-            logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
+            logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
             del model
             gc.collect()
