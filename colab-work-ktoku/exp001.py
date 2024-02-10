@@ -238,7 +238,7 @@ class Runner():
         logger.info(f'Initializing Runner.　Run Name: {RCFG.RUN_NAME}')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
-        self.info['fold_cv'] = []
+        self.info['fold_cv'] = [0 for _ in range(5)]
 
         logger.info(f'commit_hash: {commit_hash}')
         ENV.commit_hash=commit_hash
