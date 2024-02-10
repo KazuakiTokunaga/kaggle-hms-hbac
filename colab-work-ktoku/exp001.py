@@ -460,7 +460,7 @@ class Runner():
         sub[TARGETS] = predictions
         sub.to_csv('submission.csv',index=False)
         
-        sub_value = sub.to_dict('record')
+        sub_value = str(sub.to_dict('record'))
         logger.info(f"submission_csv: {sub_value}")
 
     def main(self):
