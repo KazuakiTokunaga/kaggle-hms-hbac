@@ -37,6 +37,7 @@ class RCFG:
     MODEL_PATH = '/content/drive/MyDrive/HMS/model'
     DEBUG = True
     DEBUG_SIZE = 300
+    PREDICT = True
 
 class ENV:
     """実行環境に関連する設定"""
@@ -460,9 +461,13 @@ class Runner():
         sub.to_csv('submission.csv',index=False)
         sub.head()
 
+
     def main(self):
         self.load_dataset()
         self.run_train()
 
         if ENV.save_to_sheet:
             self.write_sheet()
+        
+        if RCFG.PREDICT:
+            self.inference()
