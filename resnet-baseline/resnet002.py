@@ -44,7 +44,7 @@ class ENV:
     env = "kaggle"
     commit_hash = ""
     save_to_sheet = True
-    sheet_json_key = RCFG.ROOT_PATH + 'input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    sheet_json_key = RCFG.ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     sheet_key = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
 
 class CFG:
