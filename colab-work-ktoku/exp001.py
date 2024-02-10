@@ -344,7 +344,7 @@ class Runner():
 
                 if epoch == CFG.EPOCHS-1:
                     logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} = {cv}')
-                    self.info['fold_cv'].append(cv)
+                    self.info['fold_cv'][i] = cv
                     torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_{CFG.MODEL_NAME}.pickle')
 
             del model
@@ -364,7 +364,7 @@ class Runner():
             class_vars_to_dict(RCFG),
             class_vars_to_dict(CFG),
             *self.info['fold_cv'],
-            np.mean(self.info['fold_cv'])
+            np.mean(self.info['fold_cv'][:CFG.N_SPLITS])
         ]
     
         self.sheet.write(data, sheet_name='cv_scores')
