@@ -255,9 +255,10 @@ class Runner():
             )
 
         if RCFG.DEBUG:
-            logger.info('DEBUG MODE: Decrease N_SPLITS and EPOCHS.')
+            logger.info('DEBUG MODE: Decrease N_SPLITS, EPOCHS, BATCH_SIZE.')
             CFG.N_SPLITS = 2
-            CFG.EPOCHS = 3
+            CFG.EPOCHS = 2
+            CFG.BATCH_SIZE = 8
 
     
     def load_dataset(self, ):
