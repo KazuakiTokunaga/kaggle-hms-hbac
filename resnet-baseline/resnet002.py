@@ -202,8 +202,8 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
         loss.backward()
         optimizer.step()
         train_loss.append(loss.item())
-        if CFG.DEBUG:
-            print(f'train_loss: {loss.item()}')
+        if RCFG.DEBUG:
+            logger.info(f'train_loss: {loss.item()}')
     scheduler.step()
     # 検証ループ
     model.eval()
@@ -286,10 +286,12 @@ class Runner():
             train = train.iloc[:RCFG.DEBUG_SIZE]
 
         self.train = train.reset_index()
-        print('Train non-overlapp eeg_id shape:', train.shape )
+        logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
         # READ ALL SPECTROGRAMS
+        logger.info('Loading spectrograms specs.py')
         self.spectrograms = np.load(RCFG.ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec.py')
         self.all_eegs = np.load(RCFG.ROOT_PATH + '/input/data/eeg_specs.npy',allow_pickle=True).item()
 
 
@@ -297,7 +299,7 @@ class Runner():
 
         gkf = GroupKFold(n_splits=CFG.N_SPLITS)
         for i, (train_index, valid_index) in enumerate(gkf.split(self.train, self.train.target, self.train.patient_id)):
-            print(f'### Fold {i+1}')
+            logger.info(f'###################################### Fold {i+1}')
             # データローダーの作成
             train_dataset = EfficentNetDataset(
                 self.train.iloc[train_index],
@@ -331,8 +333,8 @@ class Runner():
                     criterion
                 )
                 # エポックごとのログを出力
-                print(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
-                print('CV Score KL-Div for EfficientNetB2 =',cv)
+                logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+                logger.info('CV Score KL-Div for EfficientNetB2 =',cv)
                 torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/fold{i}_Eff_net_snapshot_epoch_{epoch}.pickle')
             del model
             gc.collect()
