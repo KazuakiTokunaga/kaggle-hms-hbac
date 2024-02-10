@@ -258,7 +258,7 @@ class Runner():
     
     def load_dataset(self, ):
         
-        df = pd.read_csv(RCFG.ROOT_PATH + 'input/hms-harmful-brain-activity-classification/train.csv')
+        df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         TARGETS = df.columns[-6:]
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
