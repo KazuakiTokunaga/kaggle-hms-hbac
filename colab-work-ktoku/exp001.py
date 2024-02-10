@@ -20,7 +20,7 @@ import sys
 sys.path.append('/content/drive/MyDrive/HMS/input/kaggle-kl-div')
 from kaggle_kl_div import score
 
-from utils import set_random_seed, to_device
+from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -34,7 +34,7 @@ TARS2 = {x:y for y,x in TARS.items()}
 
 class RCFG:
     """実行に関連する設定"""
-    RUN_NAME = 'exp001'
+    RUN_NAME = create_random_id()
     DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     DEBUG = True

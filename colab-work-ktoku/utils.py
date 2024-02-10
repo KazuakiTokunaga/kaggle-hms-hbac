@@ -117,3 +117,7 @@ def to_device(
             k: t.to(device, *args, **kwargs) for k, t in tensors.items()}
     else:
         return tensors.to(device, *args, **kwargs)
+    
+def create_random_id(length=7):
+    """長さlengthの無作為なアルファベットの文字列を作成する"""
+    return ''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=length))
