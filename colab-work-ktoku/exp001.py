@@ -404,6 +404,7 @@ class Runner():
 
     def inference(self, ):
         
+        logger.info('Start inference.')
         test_df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
 
         paths_spectrograms = glob(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
