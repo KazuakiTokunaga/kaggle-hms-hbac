@@ -35,7 +35,7 @@ TARS2 = {x:y for y,x in TARS.items()}
 class RCFG:
     """実行に関連する設定"""
     RUN_NAME = create_random_id()
-    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
     ROOT_PATH = '/content/drive/MyDrive/HMS'
     DEBUG = True
     DEBUG_SIZE = 300
@@ -172,7 +172,7 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=0, in_chans=3)
 
         self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = nn.Linear(in_features=1280, out_features=num_classes) #1280 #1408 #1792
+        self.fc = nn.Linear(in_features=1408, out_features=num_classes) #1280 #1408 #1792
         self.base_model.classifier = self.fc
 
     def forward(self, x):
@@ -197,7 +197,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     model.train()
     train_loss = []
     for inputs, labels in train_loader:
-        inputs, labels = inputs.to(RCFG.DEVICE), labels.to(RCFG.DEVICE)
+        inputs, labels = inputs.to(torch.device(RCFG.DEVICE)), labels.to(torch.device(RCFG.DEVICE))
         optimizer.zero_grad()
         outputs = model(inputs)
         loss = criterion(log_softmax(outputs, dim = 1), labels)
@@ -215,7 +215,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
     with torch.no_grad():
         for inputs, labels in valid_loader:
             true.append(labels)
-            inputs, labels = inputs.to(RCFG.DEVICE), labels.to(RCFG.DEVICE)
+            inputs, labels = inputs.to(torch.device(RCFG.DEVICE)), labels.to(torch.device(RCFG.DEVICE))
             outputs = model(inputs)
             loss = criterion(log_softmax(outputs, dim = 1), labels)
             valid_loss.append(loss.item())
@@ -235,7 +235,7 @@ class Runner():
     def __init__(self, commit_hash=""):
 
         set_random_seed()
-        logger.info('Initializing Runner.')
+        logger.info(f'Initializing Runner.　Run Name: {RCFG.RUN_NAME}')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
         self.info['fold_cv'] = []
@@ -322,7 +322,7 @@ class Runner():
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
             # モデルの構築
-            model = HMSModel().to(RCFG.DEVICE)
+            model = HMSModel().to(torch.device(RCFG.DEVICE))
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=4, eta_min=1e-4)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
