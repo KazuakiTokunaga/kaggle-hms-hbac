@@ -387,7 +387,7 @@ class Runner():
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
                 if val_loss < best_valid_loss:
-                    best_oof = []
+                    best_oof = oof
                     best_epoch = epoch
                     best_cv = cv
                     best_valid_loss = val_loss
