@@ -26,21 +26,10 @@ from eeg_to_spec import spectrogram_from_eeg
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
-ENV = "kaggle" # kaggle, colab
-ROOT_PATH = '/content/drive/MyDrive/HMS' if ENV == "colab" else '/kaggle'
-OUTPUT_PATH = ROOT_PATH if ENV == "colab" else '/kaggle/working'
-if ENV == "kaggle":
-    (Path(OUTPUT_PATH) / 'log').mkdir(exist_ok=True)
-    (Path(OUTPUT_PATH) / 'model').mkdir(exist_ok=True)
-
-sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div')
-from kaggle_kl_div import score
-
 class RCFG:
     """実行に関連する設定"""
     RUN_NAME = ""
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-    MODEL_PATH = '/content/drive/MyDrive/HMS/model' if ENV == "colab" else '/kaggle/input/hms-hbac-model'
     DEBUG = False
     DEBUG_SIZE = 300
     PREDICT = False
@@ -261,7 +250,20 @@ def inference_function(test_loader, model, device):
 
 
 class Runner():
-    def __init__(self, commit_hash=""):
+    def __init__(self, env="colab", commit_hash=""):
+
+        global ENV, ROOT_PATH, OUTPUT_PATH, MODEL_PATH
+        ENV = env
+
+        ROOT_PATH = '/content/drive/MyDrive/HMS' if ENV == "colab" else '/kaggle'
+        OUTPUT_PATH = ROOT_PATH if ENV == "colab" else '/kaggle/working'
+        MODEL_PATH = '/content/drive/MyDrive/HMS/model' if ENV == "colab" else '/kaggle/input/hms-hbac-model'
+        if ENV == "kaggle":
+            (Path(OUTPUT_PATH) / 'log').mkdir(exist_ok=True)
+            (Path(OUTPUT_PATH) / 'model').mkdir(exist_ok=True)
+
+        sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div')
+        from kaggle_kl_div import score
 
         set_random_seed()
         global logger
@@ -291,7 +293,7 @@ class Runner():
             CFG.EPOCHS = 2
             CFG.BATCH_SIZE = 8
 
-        self.MODEL_FILES =[RCFG.MODEL_PATH + f"/{RCFG.RUN_NAME}_fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(CFG.N_SPLITS)]
+        self.MODEL_FILES =[MODEL_PATH + f"/{RCFG.RUN_NAME}_fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(CFG.N_SPLITS)]
 
     
     def load_dataset(self, ):
