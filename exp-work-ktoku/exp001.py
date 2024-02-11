@@ -376,7 +376,7 @@ class Runner():
             best_valid_loss = np.inf
             best_cv = np.inf
             best_epoch = 0
-            best_oof = []
+            best_oof = None
             for epoch in range(CFG.EPOCHS):
                 model, oof, tr_loss, val_loss, cv = train_model(
                     model, 
@@ -390,7 +390,7 @@ class Runner():
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
                 if val_loss < best_valid_loss:
-                    best_oof = oof
+                    best_oof = np.concatenate(oof).copy()
                     best_epoch = epoch
                     best_cv = cv
                     best_valid_loss = val_loss
