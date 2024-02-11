@@ -44,6 +44,7 @@ class CFG:
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = False
+    EARLY_STOPPING = -1
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -377,7 +378,7 @@ class Runner():
             best_cv = np.inf
             best_epoch = 0
             best_oof = None
-            for epoch in range(CFG.EPOCHS):
+            for epoch in range(1, CFG.EPOCHS+1):
                 model, oof, tr_loss, val_loss, cv = train_model(
                     model, 
                     train_loader, 
@@ -387,7 +388,7 @@ class Runner():
                     criterion
                 )
                 # エポックごとのログを出力
-                logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+                logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
                 if val_loss < best_valid_loss:
                     best_oof = np.concatenate(oof).copy()
@@ -397,9 +398,14 @@ class Runner():
                     self.info['fold_cv'][fold_id] = cv
                     if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
+
+                if CFG.EARLY_STOPPING > 0 and epoch - best_epoch >= CFG.EARLY_STOPPING:
+                    logger.info(f'Early stopping!')
+                    break
+
             self.train.loc[valid_index, TARGETS_OOF] = best_oof
             self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
-            logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
+            logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
 
             del model
             gc.collect()
