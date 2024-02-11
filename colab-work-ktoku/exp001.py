@@ -26,7 +26,7 @@ from eeg_to_spec import spectrogram_from_eeg
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
-ENV = "colab" # kaggle
+ENV = "kaggle" # kaggle, colab
 ROOT_PATH = '/content/drive/MyDrive/HMS' if ENV == "colab" else '/kaggle'
 OUTPUT_PATH = ROOT_PATH if ENV == "colab" else '/kaggle/working'
 if ENV == "kaggle":
@@ -335,9 +335,9 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         logger.info('Loading spectrograms specs.py')
-        self.spectrograms = np.load(ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
+        self.spectrograms = np.load(ROOT_PATH  + '/input/hbc-hbac-data/specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec.py')
-        self.all_eegs = np.load(ROOT_PATH + '/input/data/eeg_specs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(ROOT_PATH + '/input/hbc-hbac-data/eeg_specs.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
