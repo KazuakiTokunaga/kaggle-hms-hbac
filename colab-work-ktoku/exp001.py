@@ -235,7 +235,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
 
     # モデルの重みを保存
     cv=calc_cv_score(oof,true)
-    return model,np.mean(train_loss),np.mean(valid_loss),cv
+    return model, oof, np.mean(train_loss),np.mean(valid_loss),cv
 
 
 def inference_function(test_loader, model, device):
@@ -374,8 +374,9 @@ class Runner():
             best_valid_loss = np.inf
             best_cv = np.inf
             best_epoch = 0
+            best_oof = []
             for epoch in range(CFG.EPOCHS):
-                model, tr_loss, val_loss, cv = train_model(
+                model, oof, tr_loss, val_loss, cv = train_model(
                     model, 
                     train_loader, 
                     valid_loader,
@@ -387,12 +388,14 @@ class Runner():
                 logger.info(f'Epoch {epoch+1}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
                 if val_loss < best_valid_loss:
+                    best_oof = []
                     best_epoch = epoch
                     best_cv = cv
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
                     if not RCFG.DEBUG:
-                        torch.save(model.state_dict(), OUTPUT_PATH + f'/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
+                        torch.save(model.state_dict(), OUTPUT_PATH + f'/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
+            self.train.loc[valid_index, "oof"] = best_oof
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
             del model
