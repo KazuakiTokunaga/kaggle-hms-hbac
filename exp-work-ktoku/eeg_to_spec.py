@@ -53,8 +53,6 @@ def spectrogram_from_eeg(parquet_path, display=False):
     
     # VARIABLE TO HOLD SPECTROGRAM
     img = np.zeros((128,256,4),dtype='float32')
-    
-    
     signals = []
     for k in range(4):
         COLS = FEATS[k]
