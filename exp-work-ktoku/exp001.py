@@ -35,7 +35,6 @@ class RCFG:
     PREDICT = False
     COMMIT_HASH = ""
     SAVE_TO_SHEET = True
-    SHEET_JSON_KEY = ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
 
 class CFG:
@@ -183,12 +182,12 @@ class HMSModel(nn.Module):
     
 
 def calc_cv_score(oof,true):
+    from kaggle_kl_div import score
+
     oof = pd.DataFrame(np.concatenate(oof).copy())
     oof['id'] = np.arange(len(oof))
-
     true = pd.DataFrame(np.concatenate(true).copy())
     true['id'] = np.arange(len(true))
-
     cv = score(solution=true, submission=oof, row_id_column_name='id')
     return cv
 
@@ -254,16 +253,13 @@ class Runner():
 
         global ENV, ROOT_PATH, OUTPUT_PATH, MODEL_PATH
         ENV = env
-
         ROOT_PATH = '/content/drive/MyDrive/HMS' if ENV == "colab" else '/kaggle'
         OUTPUT_PATH = ROOT_PATH if ENV == "colab" else '/kaggle/working'
         MODEL_PATH = '/content/drive/MyDrive/HMS/model' if ENV == "colab" else '/kaggle/input/hms-hbac-model'
         if ENV == "kaggle":
             (Path(OUTPUT_PATH) / 'log').mkdir(exist_ok=True)
             (Path(OUTPUT_PATH) / 'model').mkdir(exist_ok=True)
-
-        sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div')
-        from kaggle_kl_div import score
+        sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div') # score関数のために必要
 
         set_random_seed()
         global logger
@@ -281,9 +277,10 @@ class Runner():
             self.user_secrets = UserSecretsClient()
 
         if RCFG.SAVE_TO_SHEET:
+            sheet_json_key = ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
             logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
-                sheet_json_key = RCFG.SHEET_JSON_KEY,
+                sheet_json_key = sheet_json_key,
                 sheet_key = RCFG.SHEET_KEY
             )
 
