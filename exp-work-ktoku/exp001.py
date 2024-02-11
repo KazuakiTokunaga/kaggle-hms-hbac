@@ -415,6 +415,7 @@ class Runner():
             self.info['start_dt_jst'],
             write_dt_jst,
             RCFG.COMMIT_HASH,
+            ENV,
             class_vars_to_dict(RCFG),
             class_vars_to_dict(CFG),
             *self.info['fold_cv'],
