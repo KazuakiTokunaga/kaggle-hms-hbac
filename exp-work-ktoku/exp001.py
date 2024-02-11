@@ -342,6 +342,8 @@ class Runner():
 
     def run_train(self, ):
 
+        TARGETS_OOF = [f"{c}_oof" for c in TARGETS]
+        self.train[TARGETS_OOF] = 0
         for fold_id in range(CFG.N_SPLITS):
 
             logger.info(f'###################################### Fold {fold_id+1}')
@@ -395,7 +397,8 @@ class Runner():
                     self.info['fold_cv'][fold_id] = cv
                     if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
-            self.train.loc[valid_index, "oof"] = best_oof
+            print(best_oof.shape, best_oof)
+            self.train.loc[valid_index, TARGETS_OOF] = best_oof
             self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
