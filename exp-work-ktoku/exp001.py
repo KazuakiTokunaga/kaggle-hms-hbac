@@ -259,6 +259,7 @@ class Runner():
         if ENV == "kaggle":
             (Path(OUTPUT_PATH) / 'log').mkdir(exist_ok=True)
             (Path(OUTPUT_PATH) / 'model').mkdir(exist_ok=True)
+            (Path(OUTPUT_PATH) / 'data').mkdir(exist_ok=True)
         sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div') # score関数のために必要
 
         set_random_seed()
@@ -393,8 +394,9 @@ class Runner():
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
                     if not RCFG.DEBUG:
-                        torch.save(model.state_dict(), OUTPUT_PATH + f'/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
+                        torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
             self.train.loc[valid_index, "oof"] = best_oof
+            self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
             del model
