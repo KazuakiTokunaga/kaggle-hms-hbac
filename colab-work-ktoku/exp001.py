@@ -1,3 +1,4 @@
+import sys
 import torch
 import torch.nn as nn
 import os, gc
@@ -18,10 +19,6 @@ from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
 
-import sys
-sys.path.append('/content/drive/MyDrive/HMS/input/kaggle-kl-div')
-from kaggle_kl_div import score
-
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
 from eeg_to_spec import spectrogram_from_eeg
@@ -29,23 +26,28 @@ from eeg_to_spec import spectrogram_from_eeg
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
 
+ENV = "colab" # kaggle
+ROOT_PATH = '/content/drive/MyDrive/HMS' if ENV == "colab" else '/kaggle'
+OUTPUT_PATH = ROOT_PATH if ENV == "colab" else '/kaggle/working'
+if ENV == "kaggle":
+    (Path(OUTPUT_PATH) / 'log').mkdir(exist_ok=True)
+    (Path(OUTPUT_PATH) / 'model').mkdir(exist_ok=True)
+
+sys.path.append(f'{ROOT_PATH}/input/kaggle-kl-div')
+from kaggle_kl_div import score
+
 class RCFG:
     """実行に関連する設定"""
     RUN_NAME = ""
     DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-    ROOT_PATH = '/content/drive/MyDrive/HMS'
-    MODEL_PATH = '/content/drive/MyDrive/HMS/model'
+    MODEL_PATH = '/content/drive/MyDrive/HMS/model' if ENV == "colab" else '/kaggle/input/hms-hbac-model'
     DEBUG = False
     DEBUG_SIZE = 300
     PREDICT = False
-
-class ENV:
-    """実行環境に関連する設定"""
-    env = "colab" # Kaggle, colab
-    commit_hash = ""
-    save_to_sheet = True
-    sheet_json_key = RCFG.ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
-    sheet_key = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
+    COMMIT_HASH = ""
+    SAVE_TO_SHEET = True
+    SHEET_JSON_KEY = ROOT_PATH + '/input/ktokunagautils/ktokunaga-4094cf694f5c.json'
+    SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
 
 class CFG:
     """モデルに関連する設定"""
@@ -67,8 +69,6 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b6": 2304, 
     "efficientnet_b7": 2560
 }
-
-MODEL_FILES =[RCFG.MODEL_PATH + f"/{RCFG.RUN_NAME}_fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(2)]
 
 class HMSDataset(Dataset):
     def __init__(
@@ -177,10 +177,10 @@ class CustomInputTransform(nn.Module):
         return x
 
 class HMSModel(nn.Module):
-    def __init__(self, num_classes=6):
+    def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
         self.input_transform = CustomInputTransform(use_kaggle=True, use_eeg=True)
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=True, num_classes=num_classes, in_chans=3)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=3)
 
         # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
@@ -265,24 +265,24 @@ class Runner():
 
         set_random_seed()
         global logger
-        logger = Logger(log_path=f'{RCFG.ROOT_PATH}/log/', filename_suffix=RCFG.RUN_NAME, debug=RCFG.DEBUG)
+        logger = Logger(log_path=f'{OUTPUT_PATH}/log/', filename_suffix=RCFG.RUN_NAME, debug=RCFG.DEBUG)
         logger.info(f'Initializing Runner.　Run Name: {RCFG.RUN_NAME}')
         start_dt_jst = str(datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).strftime('%Y-%m-%d %H:%M:%S'))
         self.info =  {"start_dt_jst": start_dt_jst}
         self.info['fold_cv'] = [0 for _ in range(5)]
 
         logger.info(f'commit_hash: {commit_hash}')
-        ENV.commit_hash=commit_hash
+        RCFG.COMMIT_HASH=commit_hash
         
-        if ENV.env == "kaggle":
+        if ENV == "kaggle":
             from kaggle_secrets import UserSecretsClient
             self.user_secrets = UserSecretsClient()
 
-        if ENV.save_to_sheet:
+        if RCFG.SAVE_TO_SHEET:
             logger.info('Initializing Google Sheet.')
             self.sheet = WriteSheet(
-                sheet_json_key = ENV.sheet_json_key,
-                sheet_key = ENV.sheet_key
+                sheet_json_key = RCFG.SHEET_JSON_KEY,
+                sheet_key = RCFG.SHEET_KEY
             )
 
         if RCFG.DEBUG:
@@ -291,10 +291,12 @@ class Runner():
             CFG.EPOCHS = 2
             CFG.BATCH_SIZE = 8
 
+        self.MODEL_FILES =[RCFG.MODEL_PATH + f"/{RCFG.RUN_NAME}_fold{k}_{CFG.MODEL_NAME}.pickle" for k in range(CFG.N_SPLITS)]
+
     
     def load_dataset(self, ):
         
-        df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
+        df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
             {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
         train.columns = ['spectrogram_id','min']
@@ -333,9 +335,9 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         logger.info('Loading spectrograms specs.py')
-        self.spectrograms = np.load(RCFG.ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
+        self.spectrograms = np.load(ROOT_PATH  + '/input/data/specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec.py')
-        self.all_eegs = np.load(RCFG.ROOT_PATH + '/input/data/eeg_specs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(ROOT_PATH + '/input/data/eeg_specs.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
@@ -390,7 +392,7 @@ class Runner():
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
                     if not RCFG.DEBUG:
-                        torch.save(model.state_dict(), RCFG.ROOT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
+                        torch.save(model.state_dict(), OUTPUT_PATH + f'/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')    
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch+1})')
 
             del model
@@ -406,7 +408,7 @@ class Runner():
             RCFG.RUN_NAME,
             self.info['start_dt_jst'],
             write_dt_jst,
-            ENV.commit_hash,
+            RCFG.COMMIT_HASH,
             class_vars_to_dict(RCFG),
             class_vars_to_dict(CFG),
             *self.info['fold_cv'],
@@ -419,9 +421,9 @@ class Runner():
     def inference(self, ):
         
         logger.info('Start inference.')
-        test_df = pd.read_csv(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
+        test_df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
 
-        paths_spectrograms = glob(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
+        paths_spectrograms = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
         logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
         all_spectrograms = {}
 
@@ -431,7 +433,7 @@ class Runner():
             all_spectrograms[name] = aux.iloc[:,1:].values
             del aux
 
-        paths_eegs = glob(RCFG.ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
+        paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         all_eegs = {}
         counter = 0
@@ -458,8 +460,8 @@ class Runner():
         )
 
         predictions = []
-        for model_weight in MODEL_FILES:
-            model = HMSModel()
+        for model_weight in self.MODEL_FILES:
+            model = HMSModel(pretrained=False)
             checkpoint = torch.load(model_weight)
             model.load_state_dict(checkpoint)
             model.to(torch.device(RCFG.DEVICE))
@@ -471,18 +473,16 @@ class Runner():
         predictions = np.array(predictions)
         predictions = np.mean(predictions, axis=0)
 
-        sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
-        sub[TARGETS] = predictions
-        sub.to_csv('submission.csv',index=False)
+        self.sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
+        self.sub[TARGETS] = predictions
+        self.sub.to_csv('submission.csv',index=False)
         
-        sub_value = str(sub.to_dict('record'))
-        logger.info(f"submission_csv: {sub_value}")
 
     def main(self):
         self.load_dataset()
         self.run_train()
 
-        if ENV.save_to_sheet:
+        if RCFG.SAVE_TO_SHEET:
             self.write_sheet()
         
         if RCFG.PREDICT:
