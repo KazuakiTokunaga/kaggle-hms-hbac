@@ -44,7 +44,8 @@ class CFG:
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = False
-    EARLY_STOPPING = -1
+    EARLY_STOPPING = 3
+    USE_EEG_V2 = True
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -65,6 +66,7 @@ class HMSDataset(Dataset):
         data, 
         specs, 
         eeg_specs,
+        eeg_specs_v2=None,
         augment=CFG.AUGMENT, 
         mode='train',
     ):
@@ -74,6 +76,7 @@ class HMSDataset(Dataset):
         self.mode = mode
         self.specs = specs
         self.eeg_specs = eeg_specs
+        self.eeg_specs_v2 = eeg_specs_v2
         self.indexes = np.arange( len(self.data))
 
     def __len__(self):
@@ -93,7 +96,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,8),dtype='float32')
+        X = np.zeros((128,256,12),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
@@ -123,12 +126,16 @@ class HMSDataset(Dataset):
 
         # EEG SPECTROGRAMS
         img = self.eeg_specs[row.eeg_id]
-        X[:,:,4:] = img
+        X[:,:,4:8] = img
+
+        if CFG.USE_EEG_V2:
+            img = self.eeg_specs_v2[row.eeg_id]
+            X[:,:,8:12] = img
 
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        return X,y # (128,256,8), (6)
+        return X,y # (128,256,12), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -139,38 +146,34 @@ class HMSDataset(Dataset):
 
 
 class CustomInputTransform(nn.Module):
-    def __init__(self, use_kaggle=True, use_eeg=True):
+    def __init__(self, ):
         super(CustomInputTransform, self).__init__()
-        self.use_kaggle = use_kaggle
-        self.use_eeg = use_eeg
 
     def forward(self, x): 
-        # x: (batch_size, 128, 256, 8)
-        if self.use_kaggle:
-            x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        # x: (batch_size, 128, 256, 12)
+        x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
-        # EEGスペクトログラム
-        if self.use_eeg:
-            x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        if CFG.USE_EEG_V2:
+            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1)
 
         # 結合
-        if self.use_kaggle and self.use_eeg:
-            x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
-        elif self.use_eeg:
-            x = x2
+        if CFG.USE_EEG_V2:
+            x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
         else:
-            x = x1
+            x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
 
-        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 512, 3)
-        x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 512)
+        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
+        x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 768)
         return x
 
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        self.input_transform = CustomInputTransform(use_kaggle=True, use_eeg=True)
+        self.input_transform = CustomInputTransform()
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=3)
 
+        # # EfficientNetで必要
         # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
         # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
@@ -340,6 +343,11 @@ class Runner():
         logger.info('Loading spectrograms eeg_spec.py')
         self.all_eegs = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
 
+        self.all_eegs_v2 = None
+        if CFG.USE_EEG_V2:
+            logger.info('Loading spectrograms eeg_spec_v2.py')
+            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
+
 
     def run_train(self, ):
 
@@ -356,6 +364,7 @@ class Runner():
                 self.train.iloc[train_index],
                 self.spectrograms, 
                 self.all_eegs,
+                self.all_eegs_v2,
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
@@ -363,6 +372,7 @@ class Runner():
                 self.train.iloc[valid_index],
                 self.spectrograms, 
                 self.all_eegs,
+                self.all_eegs_v2,
                 augment=False
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
@@ -460,7 +470,7 @@ class Runner():
         test_dataset = HMSDataset(
             data = test_df, 
             specs = all_spectrograms,
-            eeg_specs = all_eegs,
+            eeg_specs = all_eegs, # todo: add eeg_specs_v2
             mode="test"
         )
         test_loader = DataLoader(
