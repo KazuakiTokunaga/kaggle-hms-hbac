@@ -22,6 +22,7 @@ from torch.nn.functional import log_softmax, softmax
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
 from eeg_to_spec import spectrogram_from_eeg
+from eeg_to_spec_v2 import spectrogram_from_eeg_v2
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
@@ -459,18 +460,21 @@ class Runner():
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         all_eegs = {}
+        all_eegs_v2 = {}
         counter = 0
 
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
-            eeg_spectrogram = spectrogram_from_eeg(file_path, counter < 1)
+            eeg_spectrogram = spectrogram_from_eeg(file_path)
             all_eegs[int(eeg_id)] = eeg_spectrogram
+            all_eegs_v2[int(eeg_id)] = spectrogram_from_eeg_v2(file_path)
             counter += 1
 
         test_dataset = HMSDataset(
             data = test_df, 
             specs = all_spectrograms,
-            eeg_specs = all_eegs, # todo: add eeg_specs_v2
+            eeg_specs = all_eegs,
+            eeg_specs_v2= all_eegs_v2,
             mode="test"
         )
         test_loader = DataLoader(
