@@ -41,7 +41,7 @@ class RCFG:
 class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'resnet34d'
-    IN_CHANS = 1
+    IN_CHANS = 3
     EPOCHS = 9
     N_SPLITS = 5
     BATCH_SIZE = 32
@@ -165,7 +165,7 @@ class CustomInputTransform(nn.Module):
         else:
             x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
 
-        # x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
+        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
         x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 768)
         return x
 
