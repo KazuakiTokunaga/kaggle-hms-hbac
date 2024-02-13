@@ -1,31 +1,19 @@
 import albumentations as A
-import gc
 import librosa
-import matplotlib.pyplot as plt
-import math
-import multiprocessing
 import numpy as np
-import os
 import pandas as pd
 import pywt
-import random
-import time
-import timm
-import torch
-import torch.nn as nn
-from torch.nn.functional import log_softmax
+import os
+from scipy.signal import butter, lfilter
 
-from albumentations.pytorch import ToTensorV2
 from glob import glob
-from torch.utils.data import DataLoader, Dataset
-from tqdm import tqdm
 from typing import Dict, List
 
 
 USE_WAVELET = None 
+LOWPASS = False
 
 NAMES = ['LL','LP','RP','RR']
-
 FEATS = [['Fp1','F7','T3','T5','O1'],
          ['Fp1','F3','C3','P3','O1'],
          ['Fp2','F8','T4','T6','O2'],
@@ -45,6 +33,22 @@ def denoise(x: np.ndarray, wavelet: str = 'haar', level: int = 1):
     output = pywt.waverec(coeff, wavelet, mode='per')
     return output
 
+#################### lowpas filter
+
+def mu_law_encoding(data, mu):
+    mu_x = np.sign(data) * np.log(1 + mu * np.abs(data)) / np.log(mu + 1)
+    return mu_x
+
+def butter_lowpass_filter(data, cutoff_freq=20, sampling_rate=200, order=4):
+    nyquist = 0.5 * sampling_rate
+    normal_cutoff = cutoff_freq / nyquist
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    filtered_data = lfilter(b, a, data, axis=0)
+    return filtered_data
+
+####################
+
+
 def spectrogram_from_eeg(parquet_path, display=False):
     # LOAD MIDDLE 50 SECONDS OF EEG SERIES
     eeg = pd.read_parquet(parquet_path)
@@ -53,9 +57,6 @@ def spectrogram_from_eeg(parquet_path, display=False):
     
     # VARIABLE TO HOLD SPECTROGRAM
     img = np.zeros((128,256,4),dtype='float32')
-    
-    if display:
-        plt.figure(figsize=(10,7))
     signals = []
     for k in range(4):
         COLS = FEATS[k]
@@ -71,6 +72,9 @@ def spectrogram_from_eeg(parquet_path, display=False):
             else: x[:] = 0
 
             # DENOISE
+            if LOWPASS:
+                x = butter_lowpass_filter(x)
+                x = mu_law_encoding(x, 1)
             if USE_WAVELET:
                 x = denoise(x, wavelet=USE_WAVELET)
             signals.append(x)
