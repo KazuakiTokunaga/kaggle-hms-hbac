@@ -41,7 +41,7 @@ class RCFG:
 class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'resnet34d'
-    IN_CHANS = 3
+    IN_CHANS = 1
     EPOCHS = 9
     N_SPLITS = 5
     BATCH_SIZE = 32
