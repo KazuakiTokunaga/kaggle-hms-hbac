@@ -133,6 +133,16 @@ class HMSDataset(Dataset):
         if CFG.USE_EEG_V2:
             img = self.eeg_specs_v2[row.eeg_id] # (64, 256, 4)
 
+            img = np.clip(img,np.exp(-4),np.exp(8))
+            img = np.log(img)
+
+            # STANDARDIZE PER IMAGE
+            ep = 1e-6
+            m = np.nanmean(img.flatten())
+            s = np.nanstd(img.flatten())
+            img = (img-m)/(s+ep)
+            img = np.nan_to_num(img, nan=0.0)
+
             img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (128, 256, 2)に変換
             X[:,:,8:10] = img
 
