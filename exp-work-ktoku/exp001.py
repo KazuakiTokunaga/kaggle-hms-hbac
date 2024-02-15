@@ -133,8 +133,7 @@ class HMSDataset(Dataset):
         if CFG.USE_EEG_V2:
             img = self.eeg_specs_v2[row.eeg_id] # (64, 256, 4)
 
-            # (128, 256, 2)に変換
-            img = img.transpose(1,0,2).reshape(256,64*4).T
+            img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (128, 256, 2)に変換
             X[:,:,8:10] = img
 
         if self.mode!='test':
