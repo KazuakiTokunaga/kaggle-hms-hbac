@@ -22,7 +22,7 @@ from torch.nn.functional import log_softmax, softmax
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
 from eeg_to_spec import spectrogram_from_eeg
-from eeg_to_spec_v2 import spectrogram_from_eeg_v2
+from eeg_to_spec_cwt import spectrogram_from_eeg_cwt
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
@@ -41,7 +41,7 @@ class RCFG:
 class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'resnet34d'
-    IN_CHANS = 1
+    IN_CHANS = 3
     EPOCHS = 9
     N_SPLITS = 5
     BATCH_SIZE = 32
@@ -131,7 +131,19 @@ class HMSDataset(Dataset):
         X[:,:,4:8] = img
 
         if CFG.USE_EEG_V2:
-            img = self.eeg_specs_v2[row.eeg_id]
+            img = self.eeg_specs_v2[row.eeg_id] # (64, 512, 4)
+
+            img = np.clip(img,np.exp(-4),np.exp(8))
+            img = np.log(img)
+
+            # STANDARDIZE PER IMAGE
+            ep = 1e-6
+            m = np.nanmean(img.flatten())
+            s = np.nanstd(img.flatten())
+            img = (img-m)/(s+ep)
+            img = np.nan_to_num(img, nan=0.0)
+
+            img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
             X[:,:,8:12] = img
 
         if self.mode!='test':
@@ -157,7 +169,7 @@ class CustomInputTransform(nn.Module):
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         if CFG.USE_EEG_V2:
-            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1)
+            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         # 結合
         if CFG.USE_EEG_V2:
@@ -165,7 +177,7 @@ class CustomInputTransform(nn.Module):
         else:
             x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
 
-        # x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
+        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
         x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 768)
         return x
 
@@ -343,12 +355,12 @@ class Runner():
         logger.info('Loading spectrograms specs.py')
         self.spectrograms = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec.py')
-        self.all_eegs = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v3.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
 
         self.all_eegs_v2 = None
         if CFG.USE_EEG_V2:
-            logger.info('Loading spectrograms eeg_spec_v2.py')
-            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v4.npy',allow_pickle=True).item()
+            logger.info('Loading spectrograms eeg_spec_v9.py')
+            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v9.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
@@ -469,7 +481,7 @@ class Runner():
             eeg_id = file_path.split("/")[-1].split(".")[0]
             eeg_spectrogram = spectrogram_from_eeg(file_path)
             all_eegs[int(eeg_id)] = eeg_spectrogram
-            all_eegs_v2[int(eeg_id)] = spectrogram_from_eeg_v2(file_path)
+            all_eegs_v2[int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
             counter += 1
 
         test_dataset = HMSDataset(
