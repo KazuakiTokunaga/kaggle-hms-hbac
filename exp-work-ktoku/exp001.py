@@ -169,7 +169,7 @@ class CustomInputTransform(nn.Module):
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         if CFG.USE_EEG_V2:
-            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=2) # (batch_size, 512, 256, 1)
+            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
 
         # 結合
         if CFG.USE_EEG_V2:
