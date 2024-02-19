@@ -359,8 +359,8 @@ class Runner():
 
         self.all_eegs_v2 = None
         if CFG.USE_EEG_V2:
-            logger.info('Loading spectrograms eeg_spec_v9.py')
-            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v9.npy',allow_pickle=True).item()
+            logger.info('Loading spectrograms eeg_spec_v10.py')
+            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v10.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
