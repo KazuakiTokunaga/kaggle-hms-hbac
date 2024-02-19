@@ -66,9 +66,7 @@ class HMSDataset(Dataset):
     def __init__(
         self, 
         data, 
-        specs, 
-        eeg_specs,
-        eeg_specs_v2=None,
+        all_spectrograms,
         augment=CFG.AUGMENT, 
         mode='train',
     ):
@@ -76,9 +74,7 @@ class HMSDataset(Dataset):
         self.data = data
         self.augment = augment
         self.mode = mode
-        self.specs = specs
-        self.eeg_specs = eeg_specs
-        self.eeg_specs_v2 = eeg_specs_v2
+        self.specs = all_spectrograms
         self.indexes = np.arange( len(self.data))
 
     def __len__(self):
@@ -98,7 +94,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,12),dtype='float32')
+        X = np.zeros((128,256,16),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
@@ -110,7 +106,7 @@ class HMSDataset(Dataset):
 
         for k in range(4):
             # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs[row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
 
             # LOG TRANSFORM SPECTROGRAM
             img = np.clip(img,np.exp(-4),np.exp(8))
@@ -126,30 +122,30 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # EEG SPECTROGRAMS
-        img = self.eeg_specs[row.eeg_id]
+        # Chris
+        img = self.specs['chris'][row.eeg_id]
         X[:,:,4:8] = img
 
-        if CFG.USE_EEG_V2:
-            img = self.eeg_specs_v2[row.eeg_id] # (64, 512, 4)
+        # v2
+        img = self.specs['v2'][row.eeg_id]
+        X[:,:,8:12] = img
 
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
-
-            img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
-            X[:,:,8:12] = img
+        img = self.specs['v11'][row.eeg_id] # (64, 512, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
+        X[:,:,12:16] = img
 
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        return X,y # (128,256,12), (6)
+        return X,y # (128,256,16), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -167,18 +163,11 @@ class CustomInputTransform(nn.Module):
         # x: (batch_size, 128, 256, 12)
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-
-        if CFG.USE_EEG_V2:
-            x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-
-        # 結合
-        if CFG.USE_EEG_V2:
-            x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        else:
-            x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
-
-        x = x.repeat(1, 1, 1, 3) # (batch_size, 512, 768, 3)
-        x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 768)
+        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x = torch.cat([x1, x2, x3, x4], dim=2) # (batch_size, 512, 1024, 1)
+        x = x.repeat(1, 1, 1, 3) 
+        x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 1024)
         return x
 
 class HMSModel(nn.Module):
@@ -352,15 +341,15 @@ class Runner():
             self.train.loc[val_idx, "fold"] = fold_id
 
         # READ ALL SPECTROGRAMS
+        self.all_spectrograms = {}
         logger.info('Loading spectrograms specs.py')
-        self.spectrograms = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
+        self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec.py')
-        self.all_eegs = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-
-        self.all_eegs_v2 = None
-        if CFG.USE_EEG_V2:
-            logger.info('Loading spectrograms eeg_spec_v11.py')
-            self.all_eegs_v2 = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v11.npy',allow_pickle=True).item()
+        self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_v2.py')
+        self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_v11.py')
+        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v11.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
@@ -376,17 +365,13 @@ class Runner():
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
-                self.spectrograms, 
-                self.all_eegs,
-                self.all_eegs_v2,
+                self.all_spectrograms
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
-                self.spectrograms, 
-                self.all_eegs,
-                self.all_eegs_v2,
+                self.all_spectrograms,
                 augment=False
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
