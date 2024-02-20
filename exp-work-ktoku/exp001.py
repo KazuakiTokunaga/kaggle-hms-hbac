@@ -94,7 +94,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,16),dtype='float32')
+        X = np.zeros((128,256,12),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
@@ -122,16 +122,16 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id]
-        X[:,:,4:8] = img
+        # # Chris
+        # img = self.specs['chris'][row.eeg_id]
+        # X[:,:,4:8] = img
 
         # v2
         img = self.specs['v2'][row.eeg_id]
-        X[:,:,8:12] = img
+        X[:,:,4:8] = img
 
 
-        img = self.specs['v11'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cqt'][row.eeg_id] # (128, 512, 4)
         img = np.clip(img,np.exp(-4),np.exp(8))
         img = np.log(img)
         ep = 1e-6
@@ -139,8 +139,8 @@ class HMSDataset(Dataset):
         s = np.nanstd(img.flatten())
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
-        X[:,:,12:16] = img
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
+        X[:,:,9:12] = img
 
         if self.mode!='test':
             y = row.loc[TARGETS]
@@ -344,12 +344,12 @@ class Runner():
         self.all_spectrograms = {}
         logger.info('Loading spectrograms specs.py')
         self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec.py')
-        self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
+        # logger.info('Loading spectrograms eeg_spec.py')
+        # self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec_v2.py')
         self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_v11.py')
-        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v11.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_cqt.py')
+        self.all_spectrograms['cqt'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cqt.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
