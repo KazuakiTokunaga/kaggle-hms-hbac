@@ -140,7 +140,7 @@ class HMSDataset(Dataset):
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
-        X[:,:,9:12] = img
+        X[:,:,8:12] = img
 
         if self.mode!='test':
             y = row.loc[TARGETS]
