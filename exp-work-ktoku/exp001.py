@@ -47,7 +47,6 @@ class CFG:
     BATCH_SIZE = 32
     AUGMENT = False
     EARLY_STOPPING = 3
-    USE_EEG_V2 = False
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -164,8 +163,8 @@ class CustomInputTransform(nn.Module):
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x = torch.cat([x1, x2, x3, x4], dim=2) # (batch_size, 512, 1024, 1)
+        # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
         x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2) # (batch_size, 3, 512, 1024)
         return x
