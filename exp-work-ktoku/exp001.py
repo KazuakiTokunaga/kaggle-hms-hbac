@@ -350,7 +350,7 @@ class Runner():
         logger.info('Loading spectrograms eeg_spec_v2.py')
         self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
-        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
+        self.all_spectrograms['v5'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
