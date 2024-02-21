@@ -449,32 +449,30 @@ class Runner():
 
         paths_spectrograms = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
         logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
-        all_spectrograms = {}
+        
+        self.all_spectrograms = {}
+        self.all_spectrograms['kaggle'] = {}
 
         for file_path in tqdm(paths_spectrograms):
             aux = pd.read_parquet(file_path)
             name = int(file_path.split("/")[-1].split('.')[0])
-            all_spectrograms[name] = aux.iloc[:,1:].values
+            self.all_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
             del aux
 
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
-        all_eegs = {}
-        all_eegs_v2 = {}
-        counter = 0
-
+        
+        self.all_spectrograms['v2'] = {}
+        self.all_spectrograms['v11'] = {}
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
             eeg_spectrogram = spectrogram_from_eeg(file_path)
-            all_eegs[int(eeg_id)] = eeg_spectrogram
-            all_eegs_v2[int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
-            counter += 1
+            self.all_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
+            self.all_spectrograms['v11'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
 
         test_dataset = HMSDataset(
             data = test_df, 
-            specs = all_spectrograms,
-            eeg_specs = all_eegs,
-            eeg_specs_v2= all_eegs_v2,
+            all_spectrograms = self.all_spectrograms,
             mode="test"
         )
         test_loader = DataLoader(
