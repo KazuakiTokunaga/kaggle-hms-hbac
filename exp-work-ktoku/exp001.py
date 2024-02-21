@@ -129,7 +129,7 @@ class HMSDataset(Dataset):
         img = self.specs['v2'][row.eeg_id]
         X[:,:,4:8] = img
 
-        img = self.specs['v11'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['v5'][row.eeg_id] # (64, 256, 4)
         img = np.clip(img,np.exp(-4),np.exp(8))
         img = np.log(img)
         ep = 1e-6
@@ -137,8 +137,9 @@ class HMSDataset(Dataset):
         s = np.nanstd(img.flatten())
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (128, 256, 4)に変換
-        X[:,:,8:12] = img
+        img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:10] = img
 
         if self.mode!='test':
             y = row.loc[TARGETS]
@@ -161,9 +162,11 @@ class CustomInputTransform(nn.Module):
         # x: (batch_size, 128, 256, 12)
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(2)], dim=2) # (batch_size, 128, 512, 1)
+        # x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
+        x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
+        x = torch.cat([x, x3], dim=1) # (batch_size, 640, 512, 1)
         x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
         return x
@@ -346,8 +349,8 @@ class Runner():
         # self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
         logger.info('Loading spectrograms eeg_spec_v2.py')
         self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cwt_v11.py')
-        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v11.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
+        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
 
 
     def run_train(self, ):
