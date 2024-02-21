@@ -463,12 +463,12 @@ class Runner():
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
         self.all_spectrograms['v2'] = {}
-        self.all_spectrograms['v11'] = {}
+        self.all_spectrograms['v5'] = {}
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
             eeg_spectrogram = spectrogram_from_eeg(file_path)
             self.all_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
-            self.all_spectrograms['v11'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
+            self.all_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
 
         test_dataset = HMSDataset(
             data = test_df, 
@@ -486,6 +486,7 @@ class Runner():
 
         predictions = []
         for model_weight in self.MODEL_FILES:
+            logger.info(f'model weight: {model_weight}')
             model = HMSModel(pretrained=False)
             checkpoint = torch.load(model_weight)
             model.load_state_dict(checkpoint)
@@ -501,6 +502,7 @@ class Runner():
         self.sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
+        
         
 
     def main(self):
