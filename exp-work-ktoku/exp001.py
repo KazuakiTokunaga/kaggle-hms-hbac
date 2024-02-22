@@ -399,7 +399,7 @@ class Runner():
             model = HMSModel().to(torch.device(RCFG.DEVICE))
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
-            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
@@ -461,7 +461,7 @@ class Runner():
         self.sheet.write(data, sheet_name='cv_scores')
 
 
-    def inference(self, ):
+    def inference(self, all_spectrograms = None):
         
         logger.info('Start inference.')
         test_df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
@@ -469,17 +469,20 @@ class Runner():
         paths_spectrograms = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
         logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
         
-        self.all_spectrograms = {}
-        self.all_spectrograms['kaggle'] = {}
+        self.all_spectrograms = all_spectrograms
+        if self.all_spectrograms is None:
+            self.all_spectrograms = {}
+        
+        if 'kaggle' not in self.all_spectrograms:
+            self.all_spectrograms['kaggle'] = {}
+            for file_path in tqdm(paths_spectrograms):
+                aux = pd.read_parquet(file_path)
+                name = int(file_path.split("/")[-1].split('.')[0])
+                self.all_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
+                del aux
+        
 
-        for file_path in tqdm(paths_spectrograms):
-            aux = pd.read_parquet(file_path)
-            name = int(file_path.split("/")[-1].split('.')[0])
-            self.all_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
-            del aux
 
-        paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
-        logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
         self.all_spectrograms['v2'] = {}
         self.all_spectrograms['v5'] = {}
