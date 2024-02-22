@@ -93,7 +93,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,8),dtype='float32')
+        X = np.zeros((128,256,10),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
@@ -121,13 +121,13 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
+        # # Chris
+        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
+        # X[:,:,4:8] = img
 
-        # # v2
-        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,8:12] = img
+        # v2
+        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        X[:,:,4:8] = img
 
         # # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -140,18 +140,18 @@ class HMSDataset(Dataset):
         # img = np.nan_to_num(img, nan=0.0)
         # X[:,:,12:16] = img
 
-        # # v5
-        # img = self.specs['v5'][row.eeg_id] # (64, 256, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        # X[:,:,16:18] = img
+        # v5
+        img = self.specs['v5'][row.eeg_id] # (64, 256, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:10] = img
 
         
         if self.mode!='test':
@@ -175,11 +175,13 @@ class CustomInputTransform(nn.Module):
         # x: (batch_size, 128, 256, 12)
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(2)], dim=2) # (batch_size, 128, 512, 1)
         # x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
 
-        x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 768, 1)
+        x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 512, 1)
+        x = torch.cat([x, x3], dim=1) # (batch_size, 640, 512, 1)
         # x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
         # x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
 
@@ -362,12 +364,12 @@ class Runner():
         self.all_spectrograms = {}
         logger.info('Loading spectrograms specs.py')
         self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec.py')
-        self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
-        # logger.info('Loading spectrograms eeg_spec_v2.py')
-        # self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        # logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
-        # self.all_spectrograms['v5'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
+        # logger.info('Loading spectrograms eeg_spec.py')
+        # self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_v2.py')
+        self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
+        self.all_spectrograms['v5'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
         # logger.info('Loading spectrograms eeg_spec_cqt.py')
         # self.all_spectrograms['cqt'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cqt.npy',allow_pickle=True).item()
 
@@ -461,40 +463,33 @@ class Runner():
         self.sheet.write(data, sheet_name='cv_scores')
 
 
-    def inference(self, all_spectrograms = None):
+    def inference(self, all_infer_spectrograms = {}):
         
         logger.info('Start inference.')
         test_df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
 
         paths_spectrograms = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
         logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
-        
-        self.all_spectrograms = all_spectrograms
-        if self.all_spectrograms is None:
-            self.all_spectrograms = {}
-        
-        if 'kaggle' not in self.all_spectrograms:
-            self.all_spectrograms['kaggle'] = {}
-            for file_path in tqdm(paths_spectrograms):
-                aux = pd.read_parquet(file_path)
-                name = int(file_path.split("/")[-1].split('.')[0])
-                self.all_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
-                del aux
-        
 
-
+        paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
+        logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
-        self.all_spectrograms['v2'] = {}
-        self.all_spectrograms['v5'] = {}
+        all_infer_spectrograms['kaggle'] = {}
+        for file_path in tqdm(paths_spectrograms):
+            aux = pd.read_parquet(file_path)
+            name = int(file_path.split("/")[-1].split('.')[0])
+            all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
+            del aux
+        
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
             eeg_spectrogram = spectrogram_from_eeg(file_path)
-            self.all_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
-            self.all_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
+            all_infer_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
+            all_infer_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
 
         test_dataset = HMSDataset(
             data = test_df, 
-            all_spectrograms = self.all_spectrograms,
+            all_spectrograms = all_infer_spectrograms,
             mode="test"
         )
         test_loader = DataLoader(
@@ -524,7 +519,8 @@ class Runner():
         self.sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
-        
+
+        return all_infer_spectrograms
         
 
     def main(self):
