@@ -42,11 +42,11 @@ class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
-    EPOCHS = 9
+    EPOCHS = 6
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = False
-    EARLY_STOPPING = 3
+    EARLY_STOPPING = -1
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -397,8 +397,8 @@ class Runner():
 
             # モデルの構築
             model = HMSModel().to(torch.device(RCFG.DEVICE))
-            optimizer = optim.AdamW(model.parameters(),lr=0.001)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=4, eta_min=1e-4)
+            optimizer = optim.AdamW(model.parameters(),lr=0.0008)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-5)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
