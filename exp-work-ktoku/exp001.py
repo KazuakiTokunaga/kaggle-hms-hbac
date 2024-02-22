@@ -35,6 +35,7 @@ class RCFG:
     DEBUG_SIZE = 300
     PREDICT = False
     COMMIT_HASH = ""
+    USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
 
@@ -377,7 +378,9 @@ class Runner():
 
         TARGETS_OOF = [f"{c}_oof" for c in TARGETS]
         self.train[TARGETS_OOF] = 0
-        for fold_id in range(CFG.N_SPLITS):
+
+        fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
+        for fold_id in fold_lists:
 
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
