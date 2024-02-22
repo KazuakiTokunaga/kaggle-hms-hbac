@@ -175,7 +175,7 @@ class CustomInputTransform(nn.Module):
         # x: (batch_size, 128, 256, 12)
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=2) # (batch_size, 512, 256, 1)
+        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
 
