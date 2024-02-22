@@ -42,7 +42,7 @@ class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'resnet34d'
     IN_CHANS = 3
-    EPOCHS = 5
+    EPOCHS = 6
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = False
@@ -397,8 +397,9 @@ class Runner():
 
             # モデルの構築
             model = HMSModel().to(torch.device(RCFG.DEVICE))
-            optimizer = optim.AdamW(model.parameters(),lr=0.0008)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
+            optimizer = optim.AdamW(model.parameters(),lr=0.001)
+            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=2, gamma=0.1)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
