@@ -186,6 +186,8 @@ class CustomInputTransform(nn.Module):
         logger.info(f'x_t2.shape: {x_t2.shape}')
 
         x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
+        x = x.repeat(1, 1, 1, 3) 
+        x = x.permute(0, 3, 1, 2)
         logger.info(f'x.shape: {x.shape}')
         return x
 
