@@ -182,13 +182,10 @@ class CustomInputTransform(nn.Module):
         x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
         x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
         x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
-        logger.info(f'x_t.shape: {x_t.shape}')
-        logger.info(f'x_t2.shape: {x_t2.shape}')
 
         x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
         x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
-        logger.info(f'x.shape: {x.shape}')
         return x
 
 class HMSModel(nn.Module):
@@ -197,11 +194,11 @@ class HMSModel(nn.Module):
         self.input_transform = CustomInputTransform()
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
-        # # EfficientNetで必要
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        # self.base_model.classifier = self.fc
+        # EfficientNetで必要
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = self.input_transform(x)
