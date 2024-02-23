@@ -41,7 +41,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet34d'
+    MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
     EPOCHS = 6
     N_SPLITS = 5
@@ -198,10 +198,10 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        # self.base_model.classifier = self.fc
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = self.input_transform(x)
