@@ -434,8 +434,8 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         logger.info('Loading spectrograms eegs.npy')
-        # self.all_eegs = np.load(ROOT_PATH  + '/input/hms-hbac-data/eegs.npy',allow_pickle=True).item()
-        self.all_eegs = np.load('/kaggle/input/brain-eegs/eegs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load(ROOT_PATH  + '/input/hms-hbac-data/eegs.npy',allow_pickle=True).item()
+        # self.all_eegs = np.load('/kaggle/input/brain-eegs/eegs.npy',allow_pickle=True).item()
         
 
     def run_train(self, ):
