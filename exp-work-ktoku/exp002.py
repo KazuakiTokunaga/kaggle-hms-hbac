@@ -54,6 +54,7 @@ class CFG:
         'T_mult':1,
         'last_epoch':-1
     }
+    TWO_STAGE_EPOCHS = 6 # 0のときは1stのみ
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -396,27 +397,23 @@ class Runner():
     def load_dataset(self, ):
         
         df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
-        train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-            {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-        train.columns = ['spectrogram_id','min']
-
-        tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-            {'spectrogram_label_offset_seconds':'max'})
-        train['max'] = tmp
-
-        tmp = df.groupby('eeg_id')[['patient_id']].agg('first')
-        train['patient_id'] = tmp
-
-        tmp = df.groupby('eeg_id')[TARGETS].agg('sum')
-        for t in TARGETS:
-            train[t] = tmp[t].values
-
+        df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
+        train = df.groupby('eeg_id').agg(
+            min = ('spectrogram_label_offset_seconds','min'),
+            max = ('spectrogram_label_offset_seconds','max'),
+            patient_id = ('patient_id','first'),
+            total_evaluators = ('total_evaluators','mean'),
+            target = ('expert_consensus','first'),
+            seizure_vote = ('seizure_vote','sum'),
+            lpd_vote = ('lpd_vote','sum'),
+            gpd_vote = ('gpd_vote','sum'),
+            lrda_vote = ('lrda_vote','sum'),
+            grda_vote = ('grda_vote','sum'),
+            other_vote = ('other_vote','sum'),
+        )
         y_data = train[TARGETS].values
         y_data = y_data / y_data.sum(axis=1,keepdims=True)
         train[TARGETS] = y_data
-
-        tmp = df.groupby('eeg_id')[['expert_consensus']].agg('first')
-        train['target'] = tmp
 
         if RCFG.DEBUG:
             train = train.iloc[:RCFG.DEBUG_SIZE]
@@ -497,9 +494,56 @@ class Runner():
                     if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
-                if CFG.EARLY_STOPPING > 0 and epoch - best_epoch >= CFG.EARLY_STOPPING:
-                    logger.info(f'Early stopping!')
-                    break
+
+            if CFG.TWO_STAGE_EPOCHS > 0:
+                
+                # データローダーの作成
+                train_dataset = HMSDataset(
+                    self.train.iloc[train_index][self.train['total_evaluators'] >= 10],
+                    self.all_eegs
+                )
+                train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
+
+                del model
+                gc.collect()
+                torch.cuda.empty_cache()
+
+                # 1st stageでベストのモデルをロード
+                model = HMSModel()
+                model_weight = OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle'
+                checkpoint = torch.load(model_weight)
+                model.load_state_dict(checkpoint)
+                model.to(torch.device(RCFG.DEVICE))
+
+                optimizer = optim.AdamW(model.parameters(),lr=0.001)
+                scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
+                criterion = nn.KLDivLoss(reduction='batchmean') 
+
+                # トレーニングループ
+                best_valid_loss = np.inf
+                best_cv = np.inf
+                best_epoch = 0
+                best_oof = None
+                for epoch in range(1, CFG.TWO_STAGE_EPOCHS+1):
+                    model, oof, tr_loss, val_loss, cv = train_model(
+                        model, 
+                        train_loader, 
+                        valid_loader,
+                        optimizer,
+                        scheduler,
+                        criterion
+                    )
+                    # エポックごとのログを出力
+                    logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+
+                    if val_loss < best_valid_loss:
+                        best_oof = np.concatenate(oof).copy()
+                        best_epoch = epoch
+                        best_cv = cv
+                        best_valid_loss = val_loss
+                        self.info['fold_cv'][fold_id] = cv
+                        if not RCFG.DEBUG:
+                            torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
             self.train.loc[valid_index, TARGETS_OOF] = best_oof
             self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
