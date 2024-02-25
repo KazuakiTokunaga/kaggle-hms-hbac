@@ -491,15 +491,18 @@ class Runner():
                     best_cv = cv
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
-                    if not RCFG.DEBUG:
+                    if not RCFG.DEBUG or CFG.TWO_STAGE_EPOCHS:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
 
             if CFG.TWO_STAGE_EPOCHS > 0:
                 
+                logger.info(f'############ Second Stage')
                 # データローダーの作成
+                train_2nd = self.train[self.train['total_evaluators']>= 10]
+                train_index = train_2nd[train_2nd.fold != fold_id].index
                 train_dataset = HMSDataset(
-                    self.train.iloc[train_index][self.train['total_evaluators'] >= 10],
+                    train_2nd.loc[train_index],
                     self.all_eegs
                 )
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
