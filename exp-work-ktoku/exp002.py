@@ -1,4 +1,5 @@
-# EfficientNet or Resnet
+# 1dCNN
+# https://www.kaggle.com/code/medali1992/hms-resnet1d-gru-train
 
 import sys
 import torch
@@ -6,25 +7,22 @@ import torch.nn as nn
 import os, gc
 import pandas as pd, numpy as np
 import matplotlib.pyplot as plt
-import timm
 import datetime
 import random
 import warnings
 import albumentations as A
 import pathlib
+from scipy.signal import butter, lfilter
 from tqdm import tqdm
 from glob import glob
 from pathlib import Path
 from torch import optim
-from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
 
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
-from eeg_to_spec import spectrogram_from_eeg
-from eeg_to_spec_cwt import spectrogram_from_eeg_cwt
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
@@ -43,169 +41,243 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
-    IN_CHANS = 3
-    EPOCHS = 6
+    MODEL_NAME = '1dCNN'
+    EPOCHS = 10
+    IN_CHANNELS = 8
+    TARGET_SIZE = 6
     N_SPLITS = 5
-    BATCH_SIZE = 32
-    AUGMENT = False
+    BATCH_SIZE = 64
     EARLY_STOPPING = -1
+    COSANNEAL_RES_PARAMS = {
+        'T_0':20,
+        'eta_min':1e-6,
+        'T_mult':1,
+        'last_epoch':-1
+    }
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
-TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
-TARS2 = {x:y for y,x in TARS.items()}
-EFFICIENTNET_SIZE = {
-    "efficientnet_b0": 1280, 
-    "efficientnet_b2": 1408, 
-    "efficientnet_b4": 1792, 
-    "efficientnet_b5": 2048, 
-    "efficientnet_b6": 2304, 
-    "efficientnet_b7": 2560
-}
+EEG_FEATURES = ['Fp1','T3','C3','O1','Fp2','C4','T4','O2']
+FEATURE2INDEX = {x:y for x,y in zip(EEG_FEATURES, range(len(EEG_FEATURES)))}
+
+
+def butter_lowpass_filter(data, cutoff_freq=20, sampling_rate=200, order=4):
+    nyquist = 0.5 * sampling_rate
+    normal_cutoff = cutoff_freq / nyquist
+    b, a = butter(order, normal_cutoff, btype='low', analog=False)
+    filtered_data = lfilter(b, a, data, axis=0)
+    return filtered_data
+
+def eeg_from_parquet(parquet_path: str, display: bool = False) -> np.ndarray:
+    """
+    This function reads a parquet file and extracts the middle 50 seconds of readings. Then it fills NaN values
+    with the mean value (ignoring NaNs).
+    :param parquet_path: path to parquet file.
+    :param display: whether to display EEG plots or not.
+    :return data: np.array of shape  (time_steps, EEG_FEATURES) -> (10_000, 8)
+    """
+    # === Extract middle 50 seconds ===
+    eeg = pd.read_parquet(parquet_path, columns=EEG_FEATURES)
+    rows = len(eeg)
+    offset = (rows - 10_000) // 2 # 50 * 200 = 10_000
+    eeg = eeg.iloc[offset:offset+10_000] # middle 50 seconds, has the same amount of readings to left and right
+    if display: 
+        plt.figure(figsize=(10,5))
+        offset = 0
+    # === Convert to numpy ===
+    data = np.zeros((10_000, len(EEG_FEATURES))) # create placeholder of same shape with zeros
+    for index, feature in enumerate(EEG_FEATURES):
+        x = eeg[feature].values.astype('float32') # convert to float32
+        mean = np.nanmean(x) # arithmetic mean along the specified axis, ignoring NaNs
+        nan_percentage = np.isnan(x).mean() # percentage of NaN values in feature
+        # === Fill nan values ===
+        if nan_percentage < 1: # if some values are nan, but not all
+            x = np.nan_to_num(x, nan=mean)
+        else: # if all values are nan
+            x[:] = 0
+        data[:, index] = x
+        if display: 
+            if index != 0:
+                offset += x.max()
+            plt.plot(range(10_000), x-offset, label=feature)
+            offset -= x.min()
+    if display:
+        plt.legend()
+        name = parquet_path.split('/')[-1].split('.')[0]
+        plt.yticks([])
+        plt.title(f'EEG {name}',size=16)
+        plt.show()    
+    return data
+
 
 class HMSDataset(Dataset):
     def __init__(
         self, 
-        data, 
-        all_spectrograms,
-        augment=CFG.AUGMENT, 
-        mode='train',
-    ):
-
-        self.data = data
-        self.augment = augment
+        df, 
+        eegs, 
+        mode: str = 'train',
+        downsample = None
+    ): 
+        self.df = df
         self.mode = mode
-        self.specs = all_spectrograms
-        self.indexes = np.arange( len(self.data))
-
+        self.eegs = eegs
+        self.downsample = downsample
+        self.batch_size = CFG.BATCH_SIZE
+        
     def __len__(self):
-        return len(self.data)
-
-
-    def __getitem__(self, idx):
-        indexes = self.indexes[idx]
-        X, y = self.__data_generation(indexes)
-        if self.augment:
-            X = self._augment_batch(X)
+        """
+        Length of dataset.
+        """
+        return len(self.df)
+        
+    def __getitem__(self, index):
+        """
+        Get one item.
+        """
+        X, y = self.__data_generation(index)
+        if self.downsample is not None:
+            X = X[::self.downsample,:]
         if self.mode != 'test':
             return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
         else:
             return torch.tensor(X, dtype=torch.float32)
+                        
+    def __data_generation(self, index):
+        row = self.df.iloc[index]
+        X = np.zeros((10_000, 8), dtype='float32')
+        y = np.zeros(6, dtype='float32')
+        data = self.eegs[row.eeg_id]
 
-    def __data_generation(self, indexes):
-        'Generates data containing batch_size samples'
+        # === Feature engineering ===
+        X[:,0] = data[:,FEATURE2INDEX['Fp1']] - data[:,FEATURE2INDEX['T3']]
+        X[:,1] = data[:,FEATURE2INDEX['T3']] - data[:,FEATURE2INDEX['O1']]
 
-        X = np.zeros((128,256,18),dtype='float32')
-        y = np.zeros((6),dtype='float32')
-        img = np.ones((128,256),dtype='float32')
+        X[:,2] = data[:,FEATURE2INDEX['Fp1']] - data[:,FEATURE2INDEX['C3']]
+        X[:,3] = data[:,FEATURE2INDEX['C3']] - data[:,FEATURE2INDEX['O1']]
 
-        row = self.data.iloc[indexes]
-        if self.mode=='test':
-            r = 0
-        else:
-            r = int( (row['min'] + row['max'])//4 )
+        X[:,4] = data[:,FEATURE2INDEX['Fp2']] - data[:,FEATURE2INDEX['C4']]
+        X[:,5] = data[:,FEATURE2INDEX['C4']] - data[:,FEATURE2INDEX['O2']]
 
-        for k in range(4):
-            # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+        X[:,6] = data[:,FEATURE2INDEX['Fp2']] - data[:,FEATURE2INDEX['T4']]
+        X[:,7] = data[:,FEATURE2INDEX['T4']] - data[:,FEATURE2INDEX['O2']]
 
-            # LOG TRANSFORM SPECTROGRAM
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
+        # === Standarize ===
+        X = np.clip(X,-1024, 1024)
+        X = np.nan_to_num(X, nan=0) / 32.0
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
+        # === Butter Low-pass Filter ===
+        X = butter_lowpass_filter(X)
+        if self.mode != 'test':
+            y_prob = row[TARGETS].values.astype(np.float32)
+        return X, y_prob
 
-            # CROP TO 256 TIME STEPS
-            X[14:-14,:,k] = img[:,22:-22] / 2.0
+class ResNet_1D_Block(nn.Module):
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
-
-        # v2
-        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        X[:,:,8:12] = img
-
-        # cqt
-        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        X[:,:,12:16] = img
-
-        # v5
-        img = self.specs['v5'][row.eeg_id] # (64, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,16:18] = img
-
-        
-        if self.mode!='test':
-            y = row.loc[TARGETS]
-
-        return X,y # (128,256,16), (6)
-
-    def _augment_batch(self, img):
-        transforms = A.Compose([
-            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0, rotate_limit=0, p=0.3, border_mode=0), # 時間軸方向のシフト
-            A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
-        ])
-        return transforms(image=img)['image']
-
-
-class CustomInputTransform(nn.Module):
-    def __init__(self, ):
-        super(CustomInputTransform, self).__init__()
-
-    def forward(self, x): 
-        x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
-
-        x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
-        x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
-
-        x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
-        x = x.repeat(1, 1, 1, 3) 
-        x = x.permute(0, 3, 1, 2)
-        return x
-
-class HMSModel(nn.Module):
-    def __init__(self, pretrained=True, num_classes=6):
-        super(HMSModel, self).__init__()
-        self.input_transform = CustomInputTransform()
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-
-        # EfficientNetで必要
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+    def __init__(self, in_channels, out_channels, kernel_size, stride, padding, downsampling):
+        super(ResNet_1D_Block, self).__init__()
+        self.bn1 = nn.BatchNorm1d(num_features=in_channels)
+        self.relu = nn.ReLU(inplace=False)
+        self.dropout = nn.Dropout(p=0.0, inplace=False)
+        self.conv1 = nn.Conv1d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
+                               stride=stride, padding=padding, bias=False)
+        self.bn2 = nn.BatchNorm1d(num_features=out_channels)
+        self.conv2 = nn.Conv1d(in_channels=out_channels, out_channels=out_channels, kernel_size=kernel_size,
+                               stride=stride, padding=padding, bias=False)
+        self.maxpool = nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
+        self.downsampling = downsampling
 
     def forward(self, x):
-        x = self.input_transform(x)
-        x = self.base_model(x)
-        return x
+        identity = x
+
+        out = self.bn1(x)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.conv1(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.conv2(out)
+
+        out = self.maxpool(out)
+        identity = self.downsampling(x)
+
+        out += identity
+        return out
+
+
+class HMSModel(nn.Module):
+
+    def __init__(self, 
+        kernels = [3, 5, 7, 9], 
+        in_channels=CFG.IN_CHANNELS, 
+        fixed_kernel_size=5, 
+        num_classes=CFG.TARGET_SIZE
+    ):
+        
+        super(HMSModel, self).__init__()
+        self.kernels = kernels
+        self.planes = 24
+        self.parallel_conv = nn.ModuleList()
+        self.in_channels = in_channels
+        
+        for i, kernel_size in enumerate(list(self.kernels)):
+            sep_conv = nn.Conv1d(in_channels=in_channels, out_channels=self.planes, kernel_size=(kernel_size),
+                               stride=1, padding=0, bias=False,)
+            self.parallel_conv.append(sep_conv)
+
+        self.bn1 = nn.BatchNorm1d(num_features=self.planes)
+        self.relu = nn.ReLU(inplace=False)
+        self.conv1 = nn.Conv1d(in_channels=self.planes, out_channels=self.planes, kernel_size=fixed_kernel_size,
+                               stride=2, padding=2, bias=False)
+        self.block = self._make_resnet_layer(kernel_size=fixed_kernel_size, stride=1, padding=fixed_kernel_size//2)
+        self.bn2 = nn.BatchNorm1d(num_features=self.planes)
+        self.avgpool = nn.AvgPool1d(kernel_size=6, stride=6, padding=2)
+        self.rnn = nn.GRU(input_size=self.in_channels, hidden_size=128, num_layers=1, bidirectional=True)
+        self.fc = nn.Linear(in_features=424, out_features=num_classes)
+
+    def _make_resnet_layer(self, kernel_size, stride, blocks=9, padding=0):
+        layers = []
+        downsample = None
+        base_width = self.planes
+
+        for i in range(blocks):
+            downsampling = nn.Sequential(
+                    nn.MaxPool1d(kernel_size=2, stride=2, padding=0)
+                )
+            layers.append(ResNet_1D_Block(in_channels=self.planes, out_channels=self.planes, kernel_size=kernel_size,
+                                       stride=stride, padding=padding, downsampling=downsampling))
+
+        return nn.Sequential(*layers)
+    def extract_features(self, x):
+        x = x.permute(0, 2, 1)
+        out_sep = []
+
+        for i in range(len(self.kernels)):
+            sep = self.parallel_conv[i](x)
+            out_sep.append(sep)
+
+        out = torch.cat(out_sep, dim=2)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv1(out)  
+
+        out = self.block(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+        out = self.avgpool(out)  
+        
+        out = out.reshape(out.shape[0], -1)  
+        rnn_out, _ = self.rnn(x.permute(0, 2, 1))
+        new_rnn_h = rnn_out[:, -1, :]  
+
+        new_out = torch.cat([out, new_rnn_h], dim=1) 
+        return new_out
+    
+    def forward(self, x):
+        new_out = self.extract_features(x)
+        result = self.fc(new_out)  
+
+        return result
     
 
 def calc_cv_score(oof,true):
@@ -361,17 +433,10 @@ class Runner():
             self.train.loc[val_idx, "fold"] = fold_id
 
         # READ ALL SPECTROGRAMS
-        self.all_spectrograms = {}
-        logger.info('Loading spectrograms specs.py')
-        self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec.py')
-        self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_v2.py')
-        self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
-        self.all_spectrograms['v5'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cqt.py')
-        self.all_spectrograms['cqt'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cqt.npy',allow_pickle=True).item()
+        logger.info('Loading spectrograms eegs.npy')
+        # self.all_eegs = np.load(ROOT_PATH  + '/input/hms-hbac-data/eegs.npy',allow_pickle=True).item()
+        self.all_eegs = np.load('/kaggle/input/brain-eegs/eegs.npy',allow_pickle=True).item()
+        
 
     def run_train(self, ):
 
@@ -388,22 +453,22 @@ class Runner():
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
-                self.all_spectrograms
+                self.all_eegs
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
-                self.all_spectrograms,
-                augment=False
+                self.all_eegs
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
             # モデルの構築
             model = HMSModel().to(torch.device(RCFG.DEVICE))
-            optimizer = optim.AdamW(model.parameters(),lr=0.001)
+            optimizer = optim.AdamW(model.parameters(),lr=0.008)
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
-            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **CFG.COSANNEAL_RES_PARAMS)
+            # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
@@ -465,33 +530,22 @@ class Runner():
         self.sheet.write(data, sheet_name='cv_scores')
 
 
-    def inference(self, all_infer_spectrograms = {}):
+    def inference(self, all_eegs):
         
         logger.info('Start inference.')
         test_df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
 
-        paths_spectrograms = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_spectrograms/*.parquet')
-        logger.info(f'There are {len(paths_spectrograms)} spectrogram parquets')
-
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
-        
-        all_infer_spectrograms['kaggle'] = {}
-        for file_path in tqdm(paths_spectrograms):
-            aux = pd.read_parquet(file_path)
-            name = int(file_path.split("/")[-1].split('.')[0])
-            all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
-            del aux
-        
+
+        all_eegs = {}
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
-            eeg_spectrogram = spectrogram_from_eeg(file_path)
-            all_infer_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
-            all_infer_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
+            all_eegs[eeg_id] = eeg_from_parquet(file_path)
 
         test_dataset = HMSDataset(
             data = test_df, 
-            all_spectrograms = all_infer_spectrograms,
+            eegs = all_eegs,
             mode="test"
         )
         test_loader = DataLoader(
@@ -506,7 +560,7 @@ class Runner():
         predictions = []
         for model_weight in self.MODEL_FILES:
             logger.info(f'model weight: {model_weight}')
-            model = HMSModel(pretrained=False)
+            model = HMSModel()
             checkpoint = torch.load(model_weight)
             model.load_state_dict(checkpoint)
             model.to(torch.device(RCFG.DEVICE))
@@ -522,9 +576,8 @@ class Runner():
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
 
-        return all_infer_spectrograms
-        
-
+        return all_eegs
+    
     def main(self):
         self.load_dataset()
         self.run_train()
