@@ -145,7 +145,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, index):
         row = self.df.iloc[index]
         X = np.zeros((10_000, 8), dtype='float32')
-        y = np.zeros(6, dtype='float32')
+        y_prob = np.zeros(6, dtype='float32')
         data = self.eegs[row.eeg_id]
 
         # === Feature engineering ===
@@ -530,7 +530,7 @@ class Runner():
         self.sheet.write(data, sheet_name='cv_scores')
 
 
-    def inference(self, all_eegs):
+    def inference(self,):
         
         logger.info('Start inference.')
         test_df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test.csv')
@@ -540,12 +540,12 @@ class Runner():
 
         all_eegs = {}
         for file_path in tqdm(paths_eegs):
-            eeg_id = file_path.split("/")[-1].split(".")[0]
+            eeg_id = int(file_path.split("/")[-1].split(".")[0])
             all_eegs[eeg_id] = eeg_from_parquet(file_path)
 
         test_dataset = HMSDataset(
-            data = test_df, 
-            eegs = all_eegs,
+            test_df, 
+            all_eegs,
             mode="test"
         )
         test_loader = DataLoader(
