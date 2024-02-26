@@ -395,13 +395,13 @@ class Runner():
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
-                self.all_eegs
+                self.all_spectrograms
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
-                self.all_eegs
+                self.all_spectrograms
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
