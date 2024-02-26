@@ -329,6 +329,7 @@ class Runner():
         df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
         train = df.groupby('eeg_id').agg(
+            spectrogram_id= ('spectrogram_id','first'),
             min = ('spectrogram_label_offset_seconds','min'),
             max = ('spectrogram_label_offset_seconds','max'),
             patient_id = ('patient_id','first'),
