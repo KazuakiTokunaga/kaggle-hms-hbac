@@ -51,6 +51,7 @@ class CFG:
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
+    SAVE_BEST = False # Falseのときは最後のモデルを保存
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -431,13 +432,13 @@ class Runner():
                 # エポックごとのログを出力
                 logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
-                if val_loss < best_valid_loss:
+                if not CFG.SAVE_BEST or val_loss < best_valid_loss:
                     best_oof = np.concatenate(oof).copy()
                     best_epoch = epoch
                     best_cv = cv
                     best_valid_loss = val_loss
                     self.info['fold_cv'][fold_id] = cv
-                    if not RCFG.DEBUG or CFG.TWO_STAGE_EPOCHS:
+                    if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
 
@@ -452,17 +453,6 @@ class Runner():
                     self.all_eegs
                 )
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
-
-                del model
-                gc.collect()
-                torch.cuda.empty_cache()
-
-                # 1st stageでベストのモデルをロード
-                model = HMSModel()
-                model_weight = OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle'
-                checkpoint = torch.load(model_weight)
-                model.load_state_dict(checkpoint)
-                model.to(torch.device(RCFG.DEVICE))
 
                 optimizer = optim.AdamW(model.parameters(),lr=1e-4)
                 lr_schedule = {0: 1e-4, 1: 1e-5, 2: 1e-5}
@@ -487,7 +477,7 @@ class Runner():
                     # エポックごとのログを出力
                     logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
 
-                    if val_loss < best_valid_loss:
+                    if not CFG.SAVE_BEST or val_loss < best_valid_loss:
                         best_oof = np.concatenate(oof).copy()
                         best_epoch = epoch
                         best_cv = cv
