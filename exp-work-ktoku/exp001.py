@@ -134,6 +134,10 @@ class HMSDataset(Dataset):
         img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
         X[:,:,4:8] = img
 
+        # v9
+        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        X[:,:,8:12] = img
+
         # # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
         # img = np.clip(img,np.exp(-4),np.exp(8))
@@ -145,18 +149,18 @@ class HMSDataset(Dataset):
         # img = np.nan_to_num(img, nan=0.0)
         # X[:,:,12:16] = img
 
-        # v11
-        img = self.specs['v11'][row.eeg_id] # (64, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,8:12] = img
+        # # v11
+        # img = self.specs['v11'][row.eeg_id] # (64, 256, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        # X[:,:,8:12] = img
 
         
         if self.mode!='test':
@@ -370,16 +374,9 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
-        logger.info('Loading spectrograms specs.py')
-        self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
-        # logger.info('Loading spectrograms eeg_spec.py')
-        # self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_v2.py')
-        self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cwt_v11.py')
-        self.all_spectrograms['v11'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v11.npy',allow_pickle=True).item()
-        # logger.info('Loading spectrograms eeg_spec_cqt.py')
-        # self.all_spectrograms['cqt'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cqt.npy',allow_pickle=True).item()
+        for name in ['kaggle', 'v2', 'v9']:
+            logger.info(f'Loading spectrograms eeg_spec_{name}.py')
+            self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
     def run_train(self, ):
 
@@ -393,6 +390,10 @@ class Runner():
             train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
             
+            train_2nd = self.train[self.train['total_evaluators']>= 6.0]
+            train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
+            valid_2nd_index = train_2nd[train_2nd.fold == fold_id].index
+            
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
@@ -401,7 +402,7 @@ class Runner():
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
-                self.train.iloc[valid_index],
+                self.train.iloc[valid_2nd_index],
                 self.all_spectrograms
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
@@ -447,10 +448,8 @@ class Runner():
                 
                 logger.info(f'############ Second Stage')
                 # データローダーの作成
-                train_2nd = self.train[self.train['total_evaluators']>= 6.0]
-                train_index = train_2nd[train_2nd.fold != fold_id].index
                 train_dataset = HMSDataset(
-                    train_2nd.loc[train_index],
+                    train_2nd.loc[train_2nd_index],
                     self.all_spectrograms
                 )
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
@@ -534,10 +533,11 @@ class Runner():
             all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
             del aux
         
+        all_infer_spectrograms['v2'] = {}
+        all_infer_spectrograms['v5'] = {}
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
-            eeg_spectrogram = spectrogram_from_eeg(file_path)
-            all_infer_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
+            all_infer_spectrograms['v2'][int(eeg_id)] = spectrogram_from_eeg(file_path)
             all_infer_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
 
         test_dataset = HMSDataset(
