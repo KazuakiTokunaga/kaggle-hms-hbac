@@ -384,13 +384,14 @@ class Runner():
         self.train[TARGETS_OOF] = 0
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
+        train_2nd = self.train[self.train['total_evaluators']>= 6.0]
+        
         for fold_id in fold_lists:
 
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
             
-            train_2nd = self.train[self.train['total_evaluators']>= 6.0]
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
             valid_2nd_index = train_2nd[train_2nd.fold == fold_id].index
             
@@ -486,8 +487,10 @@ class Runner():
                         if not RCFG.DEBUG:
                             torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
-            self.train.loc[valid_index, TARGETS_OOF] = best_oof
-            self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
+            # self.train.loc[valid_index, TARGETS_OOF] = best_oof
+            # self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
+            train_2nd.loc[valid_2nd_index, TARGETS_OOF] = best_oof
+            train_2nd.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof_2nd.csv', index=False)
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
 
             del model
