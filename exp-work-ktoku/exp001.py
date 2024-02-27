@@ -451,7 +451,7 @@ class Runner():
                 train_index = train_2nd[train_2nd.fold != fold_id].index
                 train_dataset = HMSDataset(
                     train_2nd.loc[train_index],
-                    self.all_eegs
+                    self.all_spectrograms
                 )
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
