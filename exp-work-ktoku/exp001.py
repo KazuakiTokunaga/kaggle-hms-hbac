@@ -374,7 +374,7 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
-        for name in ['kaggle', 'v2', 'v9']:
+        for name in ['kaggle', 'v2', 'cwt_v9']:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
