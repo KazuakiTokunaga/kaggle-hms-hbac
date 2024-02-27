@@ -402,7 +402,7 @@ class Runner():
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
-                self.train.iloc[valid_2nd_index],
+                train_2nd.loc[valid_2nd_index],
                 self.all_spectrograms
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
