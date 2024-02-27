@@ -447,7 +447,7 @@ class Runner():
                 
                 logger.info(f'############ Second Stage')
                 # データローダーの作成
-                train_2nd = self.train[self.train['total_evaluators']>= 10]
+                train_2nd = self.train[self.train['total_evaluators']>= 6.0]
                 train_index = train_2nd[train_2nd.fold != fold_id].index
                 train_dataset = HMSDataset(
                     train_2nd.loc[train_index],
