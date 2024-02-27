@@ -412,7 +412,7 @@ class Runner():
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
             # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
             # 学習率スケジュールを定義
-            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-4}
+            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-4, 3: 1e-4}
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
@@ -456,7 +456,7 @@ class Runner():
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
                 optimizer = optim.AdamW(model.parameters(),lr=1e-4)
-                lr_schedule = {0: 1e-4, 1: 1e-5, 2: 1e-5}
+                lr_schedule = {0: 1e-4, 1: 1e-5, 2: 1e-5, 3: 1e-6}
                 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
                 # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
                 criterion = nn.KLDivLoss(reduction='batchmean') 
