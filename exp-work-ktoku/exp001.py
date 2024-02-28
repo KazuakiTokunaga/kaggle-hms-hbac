@@ -135,8 +135,8 @@ class HMSDataset(Dataset):
         X[:,:,4:8] = img
 
         # v9
-        img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
-        X[:,:,8:12] = img
+        # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
+        # X[:,:,8:12] = img
 
         # # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -149,18 +149,18 @@ class HMSDataset(Dataset):
         # img = np.nan_to_num(img, nan=0.0)
         # X[:,:,12:16] = img
 
-        # # v11
-        # img = self.specs['v11'][row.eeg_id] # (64, 256, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        # X[:,:,8:12] = img
+        # v9, 11
+        img = self.specs['cwt_v9'][row.eeg_id] # (64, 256, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         
         if self.mode!='test':
