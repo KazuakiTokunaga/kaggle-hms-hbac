@@ -43,7 +43,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
+    MODEL_NAME = 'resnet34d'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -138,19 +138,8 @@ class HMSDataset(Dataset):
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         # X[:,:,8:12] = img
 
-        # cqt
-        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        X[:,:,8:12] = img
-
-        # # v9, 11
-        # img = self.specs['cwt_v9'][row.eeg_id] # (64, 256, 4)
+        # # cqt
+        # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
         # img = np.clip(img,np.exp(-4),np.exp(8))
         # img = np.log(img)
         # ep = 1e-6
@@ -158,9 +147,20 @@ class HMSDataset(Dataset):
         # s = np.nanstd(img.flatten())
         # img = (img-m)/(s+ep)
         # img = np.nan_to_num(img, nan=0.0)
-        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         # X[:,:,8:12] = img
+
+        # v9, 11
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         
         if self.mode!='test':
@@ -204,10 +204,10 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = self.input_transform(x)
@@ -374,7 +374,7 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
-        for name in ['kaggle', 'v2', 'cqt']:
+        for name in ['kaggle', 'v2', 'cwt_v11']:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
