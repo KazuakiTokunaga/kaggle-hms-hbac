@@ -135,7 +135,7 @@ class HMSDataset(Dataset):
         X[:,:,4:8] = img
 
         # v9
-        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         X[:,:,8:12] = img
 
         # # cqt
