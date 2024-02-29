@@ -40,6 +40,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
+    PSEUDO_LABELLING = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -139,18 +140,7 @@ class HMSDataset(Dataset):
         # X[:,:,8:12] = img
 
         # cqt
-        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        X[:,:,8:12] = img
-
-        # v9, 11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
         # img = np.clip(img,np.exp(-4),np.exp(8))
         # img = np.log(img)
         # ep = 1e-6
@@ -158,9 +148,20 @@ class HMSDataset(Dataset):
         # s = np.nanstd(img.flatten())
         # img = (img-m)/(s+ep)
         # img = np.nan_to_num(img, nan=0.0)
-        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         # X[:,:,8:12] = img
+
+        # v9, 11
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         
         if self.mode!='test':
@@ -371,6 +372,12 @@ class Runner():
             sgkf.split(self.train, y=self.train["target"], groups=self.train["patient_id"])
         ):
             self.train.loc[val_idx, "fold"] = fold_id
+
+        if RCFG.PSEUDO_LABELLING:
+            logger.info('Load pseudo labelling data.')
+            pseudo = pd.read_csv(ROOT_PATH + '/data/hsiodet_train_oof.csv')
+            pseudo_labels = pseudo.loc[pseudo['total_evaluators']<6.0, TARGETS]
+            self.train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
