@@ -376,12 +376,13 @@ class Runner():
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
             pseudo = pd.read_csv(ROOT_PATH + '/data/hsiodet_train_oof.csv')
-            pseudo_labels = pseudo.loc[pseudo['total_evaluators']<6.0, TARGETS]
+            targets_oof = [f"{c}_oof" for c in TARGETS]
+            pseudo_labels = pseudo.loc[pseudo['total_evaluators']<6.0, targets_oof]
             self.train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
-        for name in ['kaggle', 'v2', 'cqt']:
+        for name in ['kaggle', 'v2', 'cwt_v11']:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
