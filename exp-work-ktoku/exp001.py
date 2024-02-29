@@ -538,7 +538,7 @@ class Runner():
                         best_epoch = epoch
                         best_cv = cv
                         best_valid_loss = val_loss
-                        self.info['fold_cv'][fold_id] = cv
+                        self.info['fold_cv'][fold_id] = valid_2nd_loss
                         if not RCFG.DEBUG:
                             torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
