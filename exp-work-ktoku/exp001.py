@@ -41,6 +41,7 @@ class RCFG:
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = True
+    LABELS_V2 = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -51,6 +52,7 @@ class CFG:
     BATCH_SIZE = 32
     AUGMENT = False
     EARLY_STOPPING = -1
+    TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
     TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
     SAVE_BEST = False # Falseのときは最後のモデルを保存
 
@@ -127,13 +129,13 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # # Chris
-        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,4:8] = img
-
-        # v2
-        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        # Chris
+        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
         X[:,:,4:8] = img
+
+        # # v2
+        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        # X[:,:,4:8] = img
 
         # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
@@ -151,17 +153,17 @@ class HMSDataset(Dataset):
         # X[:,:,8:12] = img
 
         # v9, 11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,8:12] = img
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        # X[:,:,8:12] = img
 
         
         if self.mode!='test':
@@ -184,12 +186,12 @@ class CustomInputTransform(nn.Module):
     def forward(self, x): 
         x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        # x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
 
         # x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
+        x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 768, 1)
         # x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
         # x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
         # x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
@@ -333,23 +335,47 @@ class Runner():
         
         df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
-        train = df.groupby('eeg_id').agg(
-            spectrogram_id= ('spectrogram_id','first'),
-            min = ('spectrogram_label_offset_seconds','min'),
-            max = ('spectrogram_label_offset_seconds','max'),
-            patient_id = ('patient_id','first'),
-            total_evaluators = ('total_evaluators','mean'),
-            target = ('expert_consensus','first'),
-            seizure_vote = ('seizure_vote','sum'),
-            lpd_vote = ('lpd_vote','sum'),
-            gpd_vote = ('gpd_vote','sum'),
-            lrda_vote = ('lrda_vote','sum'),
-            grda_vote = ('grda_vote','sum'),
-            other_vote = ('other_vote','sum'),
-        )
-        y_data = train[TARGETS].values
-        y_data = y_data / y_data.sum(axis=1,keepdims=True)
-        train[TARGETS] = y_data
+
+        def get_train_df(df_tmp):
+            train = df_tmp.groupby('eeg_id').agg(
+                spectrogram_id= ('spectrogram_id','first'),
+                min = ('spectrogram_label_offset_seconds','min'),
+                max = ('spectrogram_label_offset_seconds','max'),
+                patient_id = ('patient_id','first'),
+                total_evaluators = ('total_evaluators','mean'),
+                target = ('expert_consensus','first'),
+                seizure_vote = ('seizure_vote','sum'),
+                lpd_vote = ('lpd_vote','sum'),
+                gpd_vote = ('gpd_vote','sum'),
+                lrda_vote = ('lrda_vote','sum'),
+                grda_vote = ('grda_vote','sum'),
+                other_vote = ('other_vote','sum'),
+            )
+            y_data = train[TARGETS].values
+            y_data = y_data / y_data.sum(axis=1,keepdims=True)
+            train[TARGETS] = y_data
+            return train
+
+        if RCFG.LABELS_V2:
+            eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
+            eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
+            eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
+
+            # low, highについてはそれぞれ集計
+            df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
+            train_not_both = get_train_df(df_not_both)
+
+            # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
+            df_both = df[df['eeg_id'].isin(eeg_both)].copy()
+            df_both = df_both[df_both['total_evaluators']>=10]
+            train_both = get_train_df(df_both)
+
+            train = pd.concat([train_not_both, train_both])
+
+        else:
+            train = get_train_df(df)
+
+
 
         # compute kl-loss with uniform distribution by pytorch
         labels = train[TARGETS].values + 1e-5
@@ -382,7 +408,7 @@ class Runner():
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
-        for name in ['kaggle', 'v2', 'cwt_v11']:
+        for name in ['kaggle', 'chris']:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
@@ -392,7 +418,7 @@ class Runner():
         self.train[TARGETS_OOF] = 0
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
-        train_2nd = self.train[self.train['total_evaluators']>= 6.0]
+        train_2nd = self.train[self.train['total_evaluators']>= CFG.TWO_STAGE_THRESHOLD]
         
         for fold_id in fold_lists:
 
