@@ -40,7 +40,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = True
+    PSEUDO_LABELLING = False
     LABELS_V2 = True
 
 class CFG:
@@ -224,6 +224,16 @@ def calc_cv_score(oof,true):
     oof = pd.DataFrame(np.concatenate(oof).copy())
     oof['id'] = np.arange(len(oof))
     true = pd.DataFrame(np.concatenate(true).copy())
+    true['id'] = np.arange(len(true))
+    cv = score(solution=true, submission=oof, row_id_column_name='id')
+    return cv
+
+def get_cv_score(oof,true):
+    from kaggle_kl_div import score
+
+    oof = pd.DataFrame(oof)
+    oof['id'] = np.arange(len(oof))
+    true = pd.DataFrame(true)
     true['id'] = np.arange(len(true))
     cv = score(solution=true, submission=oof, row_id_column_name='id')
     return cv
@@ -425,6 +435,7 @@ class Runner():
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
+            true = self.train.loc[valid_index, TARGETS].values
             
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
             valid_2nd_index = train_2nd[train_2nd.fold == fold_id].index
@@ -437,7 +448,7 @@ class Runner():
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
-                train_2nd.loc[valid_2nd_index],
+                self.train.iloc[valid_index],
                 self.all_spectrograms
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
@@ -509,11 +520,15 @@ class Runner():
                         scheduler,
                         criterion
                     )
+
+                    oof = np.concatenate(oof).copy()
+                    valid_2nd_loss = get_cv_score(oof[valid_2nd_index], true[valid_2nd_index])
+
                     # エポックごとのログを出力
-                    logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+                    logger.info(f'Epoch {epoch}, Train Loss: {np.round(tr_loss, 6)}, Valid Loss: {np.round(val_loss, 6)}, Valid 2nd Loss: {np.round(valid_2nd_loss, 6)}')
 
                     if not CFG.SAVE_BEST or val_loss < best_valid_loss:
-                        best_oof = np.concatenate(oof).copy()
+                        best_oof = oof
                         best_epoch = epoch
                         best_cv = cv
                         best_valid_loss = val_loss
@@ -521,10 +536,8 @@ class Runner():
                         if not RCFG.DEBUG:
                             torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
-            # self.train.loc[valid_index, TARGETS_OOF] = best_oof
-            # self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
-            train_2nd.loc[valid_2nd_index, TARGETS_OOF] = best_oof
-            train_2nd.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof_2nd.csv', index=False)
+            self.train.loc[valid_index, TARGETS_OOF] = best_oof
+            self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
             logger.info(f'CV Score KL-Div for {CFG.MODEL_NAME} fold_id {fold_id}: {best_cv} (Epoch {best_epoch})')
 
             del model
