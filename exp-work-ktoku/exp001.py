@@ -435,10 +435,13 @@ class Runner():
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
-            true = self.train.loc[valid_index, TARGETS].values
+            
+            valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
+            true = valid_df[TARGETS].values
+            valid_2nd_index = valid_df[valid_df['total_evaluators']>=CFG.TWO_STAGE_THRESHOLD].index
+            print(valid_2nd_index)
             
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
-            valid_2nd_index = train_2nd[train_2nd.fold == fold_id].index
             
             # データローダーの作成
             train_dataset = HMSDataset(
@@ -477,11 +480,15 @@ class Runner():
                     scheduler,
                     criterion
                 )
+                
+                oof = np.concatenate(oof).copy()
+                valid_2nd_loss = get_cv_score(oof[valid_2nd_index], true[valid_2nd_index])
+
                 # エポックごとのログを出力
-                logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+                logger.info(f'Epoch {epoch}, Train Loss: {np.round(tr_loss, 6)}, Valid Loss: {np.round(val_loss, 6)}, Valid 2nd Loss: {np.round(valid_2nd_loss, 6)}')
 
                 if not CFG.SAVE_BEST or val_loss < best_valid_loss:
-                    best_oof = np.concatenate(oof).copy()
+                    best_oof = oof
                     best_epoch = epoch
                     best_cv = cv
                     best_valid_loss = val_loss
