@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = True
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'chris']
+    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cwt_v11']
 
 class CFG:
     """モデルに関連する設定"""
@@ -130,13 +130,13 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
-
-        # # v2
-        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        # # Chris
+        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
         # X[:,:,4:8] = img
+
+        # v2
+        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        X[:,:,4:8] = img
 
         # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
@@ -154,17 +154,17 @@ class HMSDataset(Dataset):
         # X[:,:,8:12] = img
 
         # v9, 11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        # X[:,:,8:12] = img
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         
         if self.mode!='test':
@@ -187,12 +187,12 @@ class CustomInputTransform(nn.Module):
     def forward(self, x): 
         x1 =  torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        # x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         # x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
 
         # x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x = torch.cat([x1, x2], dim=2) # (batch_size, 512, 768, 1)
+        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
         # x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
         # x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
         # x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
@@ -269,9 +269,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
             valid_loss.append(loss.item())
             oof.append(softmax(outputs,dim=1).to('cpu').numpy())
 
-    # モデルの重みを保存
-    cv=calc_cv_score(oof,true)
-    return model, oof, np.mean(train_loss),np.mean(valid_loss),cv
+    return model, oof, np.mean(train_loss),np.mean(valid_loss)
 
 
 def inference_function(test_loader, model, device):
@@ -471,7 +469,7 @@ class Runner():
             best_epoch = 0
             best_oof = None
             for epoch in range(1, CFG.EPOCHS+1):
-                model, oof, tr_loss, val_loss, cv = train_model(
+                model, oof, tr_loss, val_loss = train_model(
                     model, 
                     train_loader, 
                     valid_loader,
@@ -489,9 +487,9 @@ class Runner():
                 if not CFG.SAVE_BEST or val_loss < best_valid_loss:
                     best_oof = oof
                     best_epoch = epoch
-                    best_cv = cv
+                    best_cv = valid_2nd_loss
                     best_valid_loss = val_loss
-                    self.info['fold_cv'][fold_id] = cv
+                    self.info['fold_cv'][fold_id] = valid_2nd_loss
                     if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
@@ -518,7 +516,7 @@ class Runner():
                 best_epoch = 0
                 best_oof = None
                 for epoch in range(1, CFG.TWO_STAGE_EPOCHS+1):
-                    model, oof, tr_loss, val_loss, cv = train_model(
+                    model, oof, tr_loss, val_loss = train_model(
                         model, 
                         train_loader, 
                         valid_loader,
@@ -536,7 +534,7 @@ class Runner():
                     if not CFG.SAVE_BEST or val_loss < best_valid_loss:
                         best_oof = oof
                         best_epoch = epoch
-                        best_cv = cv
+                        best_cv = valid_2nd_loss
                         best_valid_loss = val_loss
                         self.info['fold_cv'][fold_id] = valid_2nd_loss
                         if not RCFG.DEBUG:
