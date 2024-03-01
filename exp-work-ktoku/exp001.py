@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cwt_v11']
+    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cqt']
 
 class CFG:
     """モデルに関連する設定"""
@@ -143,18 +143,7 @@ class HMSDataset(Dataset):
         # X[:,:,8:12] = img
 
         # cqt
-        # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # X[:,:,8:12] = img
-
-        # v9, 11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
         img = np.clip(img,np.exp(-4),np.exp(8))
         img = np.log(img)
         ep = 1e-6
@@ -162,9 +151,20 @@ class HMSDataset(Dataset):
         s = np.nanstd(img.flatten())
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         X[:,:,8:12] = img
+
+        # v9, 11
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 256, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        # X[:,:,8:12] = img
 
         
         if self.mode!='test':
