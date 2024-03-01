@@ -102,7 +102,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,8),dtype='float32')
+        X = np.zeros((128,256,12),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
