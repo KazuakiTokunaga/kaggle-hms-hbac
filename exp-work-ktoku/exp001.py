@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cqt', 'cwt_v5', 'chris']
+    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cqt', 'cwt_v5', 'cwt_v11']
 
 class CFG:
     """モデルに関連する設定"""
@@ -130,13 +130,13 @@ class HMSDataset(Dataset):
             # CROP TO 256 TIME STEPS
             X[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
+        # # Chris
+        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
+        # X[:,:,4:8] = img
 
         # v2
         img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        X[:,:,8:12] = img
+        X[:,:,4:8] = img
 
         # # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
@@ -151,9 +151,21 @@ class HMSDataset(Dataset):
         s = np.nanstd(img.flatten())
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
+        X[:,:,8:12] = img
+
+        # v11
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         X[:,:,12:16] = img
 
-        # v5, 11
+        # v5
         img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
         img = np.clip(img,np.exp(-4),np.exp(8))
         img = np.log(img)
@@ -163,7 +175,6 @@ class HMSDataset(Dataset):
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
         img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         X[:,:,16:18] = img
 
         
@@ -580,15 +591,15 @@ class Runner():
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
-        all_infer_spectrograms['kaggle'] = {}
+        for name in RCFG.USE_SPECTROGRAMS:
+            all_infer_spectrograms[name] = {}
+
         for file_path in tqdm(paths_spectrograms):
             aux = pd.read_parquet(file_path)
             name = int(file_path.split("/")[-1].split('.')[0])
             all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
             del aux
         
-        all_infer_spectrograms['v2'] = {}
-        all_infer_spectrograms['v5'] = {}
         for file_path in tqdm(paths_eegs):
             eeg_id = file_path.split("/")[-1].split(".")[0]
             all_infer_spectrograms['v2'][int(eeg_id)] = spectrogram_from_eeg(file_path)
