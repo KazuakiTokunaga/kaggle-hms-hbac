@@ -43,6 +43,7 @@ class RCFG:
     PSEUDO_LABELLING = False
     LABELS_V2 = True
     USE_SPECTROGRAMS = ['kaggle', 'v2', 'cqt', 'cwt_v5', 'cwt_v11']
+    CREATE_SPECS = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -591,6 +592,7 @@ class Runner():
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
+        all_infer_spectrograms = {}
         for name in RCFG.USE_SPECTROGRAMS:
             all_infer_spectrograms[name] = {}
 
@@ -600,10 +602,46 @@ class Runner():
             all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
             del aux
         
-        for file_path in tqdm(paths_eegs):
-            eeg_id = file_path.split("/")[-1].split(".")[0]
-            all_infer_spectrograms['v2'][int(eeg_id)] = spectrogram_from_eeg(file_path)
-            all_infer_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
+        gc.collect()
+        if RCFG.CREATE_SPECS:
+            TMP = Path(ROOT_PATH) / "tmp"
+            TMP.mkdir(exist_ok=True)
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_v2.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cwt_v5.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cwt_v11.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cqt.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+        
+        for name in RCFG.USE_SPECTROGRAMS:
+            if name == 'kaggle': continue
+            all_infer_spectrograms[name] = np.load(TMP / f'eeg_specs_{name}.npy', allow_pickle=True).item()
 
         test_dataset = HMSDataset(
             data = test_df, 
@@ -628,6 +666,7 @@ class Runner():
             model.to(torch.device(RCFG.DEVICE))
             prediction_dict = inference_function(test_loader, model, torch.device(RCFG.DEVICE))
             predictions.append(prediction_dict["predictions"])
+            del model
             torch.cuda.empty_cache()
             gc.collect()
             
@@ -637,8 +676,6 @@ class Runner():
         self.sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
-
-        return all_infer_spectrograms
         
 
     def main(self):
