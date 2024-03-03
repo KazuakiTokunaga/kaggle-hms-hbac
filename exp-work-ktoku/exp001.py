@@ -44,6 +44,7 @@ class RCFG:
     LABELS_V2 = True
     USE_SPECTROGRAMS = ['kaggle', 'fix_common_p1', 'fix_common_p2']
     CREATE_SPECS = True
+    USE_ALL_LOW_QUALITY = False
 
 class CFG:
     """モデルに関連する設定"""
@@ -424,24 +425,40 @@ class Runner():
         if RCFG.DEBUG:
             train = train.iloc[:RCFG.DEBUG_SIZE]
 
-        self.train = train.reset_index()
+        train = train.reset_index()
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
         # Create Fold
-        self.train['stage'] = self.train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
-        sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
-        self.train["fold"] = -1
-        for fold_id, (_, val_idx) in enumerate(
-            sgkf.split(self.train, y=self.train["stage"], groups=self.train["patient_id"])
-        ):
-            self.train.loc[val_idx, "fold"] = fold_id
+        train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
+
+        if RCFG.USE_ALL_LOW_QUALITY:
+            logger.info('Use all low quality data.')
+            train_2nd = train[train['stage']==2].copy().reset_index()
+            train_2nd["fold"] = -1
+            sgkf = StratifiedGroupKFold(n_splits=5)
+            for fold_id, (_, val_idx) in enumerate(
+                sgkf.split(train_2nd, y=train_2nd['target'], groups=train_2nd["patient_id"])
+            ):
+                train_2nd.loc[val_idx, "fold"] = fold_id
+            df_patient_id_fold = train_2nd[['patient_id', 'fold']].drop_duplicates()
+            train = train.merge(df_patient_id_fold, on='patient_id', how='left')
+            train.loc[train['fold'].isnull(), 'fold'] = -1
+        else:
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
+            train["fold"] = -1
+            for fold_id, (_, val_idx) in enumerate(
+                sgkf.split(train, y=train["stage"], groups=train["patient_id"])
+            ):
+                train.loc[val_idx, "fold"] = fold_id
 
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
             pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
             targets_oof = [f"{c}_oof" for c in TARGETS]
             pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
-            self.train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
+            train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
+
+        self.train = train
 
         # READ ALL SPECTROGRAMS
         self.all_spectrograms = {}
