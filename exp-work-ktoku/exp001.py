@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'v2', 'fix_cwt_mexh']
+    USE_SPECTROGRAMS = ['kaggle', 'fix_common_p1', 'fix_common_p2']
     CREATE_SPECS = True
 
 class CFG:
@@ -103,7 +103,7 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,18),dtype='float32')
+        X = np.zeros((128,256,12),dtype='float32')
         y = np.zeros((6),dtype='float32')
         img = np.ones((128,256),dtype='float32')
 
@@ -136,17 +136,29 @@ class HMSDataset(Dataset):
         # X[:,:,4:8] = img
 
         # v2
-        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
+        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        # X[:,:,4:8] = img
 
         # # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         # X[:,:,12:12] = img
 
         # v11
-        img = self.specs['fix_cwt_mexh'][row.eeg_id] # (64, 512, 4)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,8:12] = img
+        # img = self.specs['fix_cwt_mexh'][row.eeg_id] # (64, 512, 4)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        # X[:,:,8:12] = img
+
+        img = self.specs['fix_common_p1'][row.eeg_id] # (128, 128, 8)
+        img_tmp = np.zeros((128, 256, 4))
+        for i in range(4):
+            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        X[:,:,4:8] = img_tmp
+
+        img = self.specs['fix_common_p2'][row.eeg_id] # (128, 128, 8)
+        img_tmp = np.zeros((128, 256, 4))
+        for i in range(4):
+            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        X[:,:,8:12] = img_tmp
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -401,8 +413,6 @@ class Runner():
         else:
             train = get_train_df(df)
 
-
-
         # compute kl-loss with uniform distribution by pytorch
         labels = train[TARGETS].values + 1e-5
         train['kl'] = torch.nn.functional.kl_div(
@@ -418,10 +428,11 @@ class Runner():
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
         # Create Fold
+        self.train['stage'] = self.train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
         sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
         self.train["fold"] = -1
         for fold_id, (_, val_idx) in enumerate(
-            sgkf.split(self.train, y=self.train["target"], groups=self.train["patient_id"])
+            sgkf.split(self.train, y=self.train["stage"], groups=self.train["patient_id"])
         ):
             self.train.loc[val_idx, "fold"] = fold_id
 
@@ -444,7 +455,7 @@ class Runner():
         self.train[TARGETS_OOF] = 0
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
-        train_2nd = self.train[self.train['total_evaluators']>= CFG.TWO_STAGE_THRESHOLD]
+        train_2nd = self.train[self.train['stage']==2]
         
         for fold_id in fold_lists:
 
@@ -454,7 +465,7 @@ class Runner():
             
             valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
             true = valid_df[TARGETS].values
-            valid_2nd_index = valid_df[valid_df['total_evaluators']>=CFG.TWO_STAGE_THRESHOLD].index
+            valid_2nd_index = valid_df[valid_df['stage']==2].index
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
             
             # データローダーの作成
