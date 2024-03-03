@@ -460,7 +460,7 @@ class Runner():
 
         self.train = train
 
-        # READ ALL SPECTROGRAMS
+    def load_spectrograms(self, ):
         self.all_spectrograms = {}
         for name in RCFG.USE_SPECTROGRAMS:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
@@ -713,6 +713,7 @@ class Runner():
 
     def main(self):
         self.load_dataset()
+        self.load_spectrograms()
         self.run_train()
 
         if RCFG.SAVE_TO_SHEET:
