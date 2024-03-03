@@ -181,8 +181,8 @@ class HMSDataset(Dataset):
         s = np.nanstd(img.flatten())
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,12:16] = img
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
