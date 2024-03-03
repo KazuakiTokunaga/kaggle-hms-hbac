@@ -396,6 +396,7 @@ class Runner():
             return train
 
         if RCFG.LABELS_V2:
+            logger.info('Create labels considering 2nd stage learning.')
             eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
             eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
             eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
