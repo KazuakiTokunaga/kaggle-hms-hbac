@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cqt', 'cwt_v5', 'cwt_v11']
+    USE_SPECTROGRAMS = ['kaggle', 'v2', 'fix_cwt_mexh']
     CREATE_SPECS = True
 
 class CFG:
@@ -143,40 +143,45 @@ class HMSDataset(Dataset):
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         # X[:,:,12:12] = img
 
-        # cqt
-        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
+        # v11
+        img = self.specs['fix_cwt_mexh'][row.eeg_id] # (64, 512, 4)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         X[:,:,8:12] = img
 
-        # v11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,12:16] = img
+        # cqt
+        # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # X[:,:,8:12] = img
+
+        # # v11
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        # X[:,:,12:16] = img
 
         # v5
-        img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        X[:,:,16:18] = img
+        # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
+        # X[:,:,16:18] = img
 
         
         if self.mode!='test':
@@ -200,14 +205,14 @@ class CustomInputTransform(nn.Module):
         x1 =  torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
         x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
+        # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
+        # x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
 
-        x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        # x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
-        x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
-        x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
+        # x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
+        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
+        # x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
+        # x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
+        # x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
     
         x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
