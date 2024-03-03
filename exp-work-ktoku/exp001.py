@@ -42,9 +42,9 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'fix_common_p1', 'fix_common_p2']
+    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cwt_v11']
     CREATE_SPECS = True
-    USE_ALL_LOW_QUALITY = False
+    USE_ALL_LOW_QUALITY = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -137,8 +137,8 @@ class HMSDataset(Dataset):
         # X[:,:,4:8] = img
 
         # v2
-        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,4:8] = img
+        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        X[:,:,4:8] = img
 
         # # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
@@ -149,17 +149,17 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         # X[:,:,8:12] = img
 
-        img = self.specs['fix_common_p1'][row.eeg_id] # (128, 128, 8)
-        img_tmp = np.zeros((128, 256, 4))
-        for i in range(4):
-            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        X[:,:,4:8] = img_tmp
+        # img = self.specs['fix_common_p1'][row.eeg_id] # (128, 128, 8)
+        # img_tmp = np.zeros((128, 256, 4))
+        # for i in range(4):
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        # X[:,:,4:8] = img_tmp
 
-        img = self.specs['fix_common_p2'][row.eeg_id] # (128, 128, 8)
-        img_tmp = np.zeros((128, 256, 4))
-        for i in range(4):
-            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        X[:,:,8:12] = img_tmp
+        # img = self.specs['fix_common_p2'][row.eeg_id] # (128, 128, 8)
+        # img_tmp = np.zeros((128, 256, 4))
+        # for i in range(4):
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        # X[:,:,8:12] = img_tmp
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -172,17 +172,17 @@ class HMSDataset(Dataset):
         # img = np.nan_to_num(img, nan=0.0)
         # X[:,:,8:12] = img
 
-        # # v11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        # X[:,:,12:16] = img
+        # v11
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
+        X[:,:,12:16] = img
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -447,7 +447,7 @@ class Runner():
             sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
-                sgkf.split(train, y=train["stage"], groups=train["patient_id"])
+                sgkf.split(train, y=train["target"], groups=train["patient_id"])
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
