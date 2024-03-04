@@ -114,6 +114,7 @@ class HMSDataset(Dataset):
         else:
             r = int( (row['min'] + row['max'])//4 )
 
+        x_tmp = np.zeros((128, 256, 4), dtype='float32')
         for k in range(4):
             # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
             img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
@@ -130,43 +131,45 @@ class HMSDataset(Dataset):
             img = np.nan_to_num(img, nan=0.0)
 
             # CROP TO 256 TIME STEPS
-            X[14:-14,:,k] = img[:,22:-22] / 2.0
+            x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
+        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # Chris
         # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,4:8] = img
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v2
         img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
+        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,12:12] = img
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v11
         # img = self.specs['fix_cwt_mexh'][row.eeg_id] # (64, 512, 4)
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        # X[:,:,8:12] = img
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # img = self.specs['common_cwt_mexh_p1'][row.eeg_id] # (128, 128, 8)
         # img_tmp = np.zeros((128, 256, 4), dtype='float32')
         # for i in range(4):
-        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        # X[:,:,4:8] = img_tmp
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1])) # (128, 256, 4)
+        # x2 = np.concatenate([img_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        
 
         # img = self.specs['common_cwt_mexh_p2'][row.eeg_id] # (128, 128, 8)
         # img_tmp = np.zeros((128, 256, 4), dtype='float32')
         # for i in range(4):
-        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        # X[:,:,8:12] = img_tmp
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1])) # (128, 256, 4)
+        # x2 = np.concatenate([img_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         img = self.specs['fix_cqt_v1'][row.eeg_id] # (128, 384, 4)
         img_tmp = np.zeros((256, 384, 2), dtype='float32')
         for i in range(2):
             img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)
-        img_tmp_v2 = np.zeros((256, 768, 1), dtype='float32')
-        img_tmp_v2[:, :, 0] = np.concatenate((img_tmp[:, :, 0], img_tmp[:, :, 1]), axis=1)
+        x11 = np.concatenate((img_tmp[:, :, 0:1], img_tmp[:, :, 1:2]), axis=1) # (256, 768, 1)
+        
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -177,7 +180,7 @@ class HMSDataset(Dataset):
         # s = np.nanstd(img.flatten())
         # img = (img-m)/(s+ep)
         # img = np.nan_to_num(img, nan=0.0)
-        # X[:,:,8:12] = img
+        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v11
         img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
@@ -189,7 +192,7 @@ class HMSDataset(Dataset):
         img = (img-m)/(s+ep)
         img = np.nan_to_num(img, nan=0.0)
         img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        X[:,:,8:12] = img
+        x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -201,18 +204,10 @@ class HMSDataset(Dataset):
         # img = (img-m)/(s+ep)
         # img = np.nan_to_num(img, nan=0.0)
         # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # X[:,:,16:18] = img
+        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
-        
-        x1 = np.concatenate([X[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
-        x2 = np.concatenate([X[:, :, i+4:i+5] for i in range(4)], axis=0) # (512, 256, 1)
-        x3 = np.concatenate([X[:, :, i+8:i+9] for i in range(4)], axis=0) # (512, 256, 1)
-        # x4 = np.concatenate([x[:, :, i+12:i+13] for i in range(4)], dim=1) # (512, 256, 1)
-        # x5 = np.concatenate([x[:, :, i+16:i+17] for i in range(2)], dim=1) # (256, 256, 1)
-
-        # x_t = np.concatenate([x1, x2, x3], dim=1) # (512, 768, 1)
         X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        X = np.concatenate([X, img_tmp_v2], axis=0) # (768, 768, 1)
+        X = np.concatenate([X, x11], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
@@ -221,7 +216,7 @@ class HMSDataset(Dataset):
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        return X,y
+        return X, y # (768, 768, 1), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
