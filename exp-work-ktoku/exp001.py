@@ -44,7 +44,7 @@ class RCFG:
     LABELS_V2 = True
     USE_SPECTROGRAMS = ['kaggle', 'common_cwt_mexh_p1', 'common_cwt_mexh_p2']
     CREATE_SPECS = True
-    USE_ALL_LOW_QUALITY = True
+    USE_ALL_LOW_QUALITY = False
 
 class CFG:
     """モデルに関連する設定"""
