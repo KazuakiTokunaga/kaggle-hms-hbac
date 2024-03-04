@@ -104,9 +104,9 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,12),dtype='float32')
         y = np.zeros((6),dtype='float32')
-        img = np.ones((128,256),dtype='float32')
+        if self.mode!='test':
+            y = row.loc[TARGETS]
 
         row = self.data.iloc[indexes]
         if self.mode=='test':
@@ -167,7 +167,7 @@ class HMSDataset(Dataset):
         img = self.specs['fix_cqt_v1'][row.eeg_id] # (128, 384, 4)
         img_tmp = np.zeros((256, 384, 2), dtype='float32')
         for i in range(2):
-            img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)
+            img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)  # (256, 384, 2)
         x11 = np.concatenate((img_tmp[:, :, 0:1], img_tmp[:, :, 1:2]), axis=1) # (256, 768, 1)
         
 
@@ -212,10 +212,6 @@ class HMSDataset(Dataset):
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
 
-        
-        if self.mode!='test':
-            y = row.loc[TARGETS]
-
         return X, y # (768, 768, 1), (6)
 
     def _augment_batch(self, img):
@@ -232,10 +228,10 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        # self.base_model.classifier = self.fc
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
