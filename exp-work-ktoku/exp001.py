@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'common_cwt_mexh_p1', 'common_cwt_mexh_p2']
+    USE_SPECTROGRAMS = ['kaggle', 'fix_cqt_v1', 'v2', 'cwt_v11']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
@@ -137,8 +137,8 @@ class HMSDataset(Dataset):
         # X[:,:,4:8] = img
 
         # v2
-        # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        # X[:,:,4:8] = img
+        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
+        X[:,:,4:8] = img
 
         # # v9
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
@@ -149,17 +149,24 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         # X[:,:,8:12] = img
 
-        img = self.specs['common_cwt_mexh_p1'][row.eeg_id] # (128, 128, 8)
-        img_tmp = np.zeros((128, 256, 4))
-        for i in range(4):
-            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        X[:,:,4:8] = img_tmp
+        # img = self.specs['common_cwt_mexh_p1'][row.eeg_id] # (128, 128, 8)
+        # img_tmp = np.zeros((128, 256, 4), dtype='float32')
+        # for i in range(4):
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        # X[:,:,4:8] = img_tmp
 
-        img = self.specs['common_cwt_mexh_p2'][row.eeg_id] # (128, 128, 8)
-        img_tmp = np.zeros((128, 256, 4))
-        for i in range(4):
-            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        X[:,:,8:12] = img_tmp
+        # img = self.specs['common_cwt_mexh_p2'][row.eeg_id] # (128, 128, 8)
+        # img_tmp = np.zeros((128, 256, 4), dtype='float32')
+        # for i in range(4):
+        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        # X[:,:,8:12] = img_tmp
+
+        img = self.specs['fix_cqt_v1'][row.eeg_id] # (128, 384, 4)
+        img_tmp = np.zeros((256, 384, 2), dtype='float32')
+        for i in range(2):
+            img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)
+        img_tmp_v2 = np.zeros((256, 768, 1), dtype='float32')
+        img_tmp_v2[:, :, 0] = np.concatenate((img_tmp[:, :, 0], img_tmp[:, :, 1]), axis=1)
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -172,17 +179,17 @@ class HMSDataset(Dataset):
         # img = np.nan_to_num(img, nan=0.0)
         # X[:,:,8:12] = img
 
-        # # v11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        # X[:,:,8:12] = img
+        # v11
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        X[:,:,8:12] = img
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -197,10 +204,24 @@ class HMSDataset(Dataset):
         # X[:,:,16:18] = img
 
         
+        x1 = np.concatenate([X[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        x2 = np.concatenate([X[:, :, i+4:i+5] for i in range(4)], axis=0) # (512, 256, 1)
+        x3 = np.concatenate([X[:, :, i+8:i+9] for i in range(4)], axis=0) # (512, 256, 1)
+        # x4 = np.concatenate([x[:, :, i+12:i+13] for i in range(4)], dim=1) # (512, 256, 1)
+        # x5 = np.concatenate([x[:, :, i+16:i+17] for i in range(2)], dim=1) # (256, 256, 1)
+
+        # x_t = np.concatenate([x1, x2, x3], dim=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([X, img_tmp_v2], axis=0) # (768, 768, 1)
+        # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
+        # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
+        # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
+
+        
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        return X,y # (128,256,12), (6)
+        return X,y
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -210,42 +231,22 @@ class HMSDataset(Dataset):
         return transforms(image=img)['image']
 
 
-class CustomInputTransform(nn.Module):
-    def __init__(self, ):
-        super(CustomInputTransform, self).__init__()
-
-    def forward(self, x): 
-        x1 =  torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        # x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        # x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
-
-        # x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        # x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
-        # x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
-        # x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
-    
-        x = x.repeat(1, 1, 1, 3) 
-        x = x.permute(0, 3, 1, 2)
-        return x
-
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        self.input_transform = CustomInputTransform()
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
-        x = self.input_transform(x)
+        x = x.repeat(1, 1, 1, 3) 
+        x = x.permute(0, 3, 1, 2)
         x = self.base_model(x)
+
         return x
     
 
