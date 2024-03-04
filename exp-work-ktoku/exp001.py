@@ -104,11 +104,11 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
+        row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
         if self.mode!='test':
             y = row.loc[TARGETS]
 
-        row = self.data.iloc[indexes]
         if self.mode=='test':
             r = 0
         else:
