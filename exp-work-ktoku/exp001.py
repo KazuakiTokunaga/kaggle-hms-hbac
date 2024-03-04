@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'v2', 'cwt_v11']
+    USE_SPECTROGRAMS = ['kaggle', 'common_cwt_mexh_p1', 'common_cwt_mexh_p2']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = True
 
@@ -149,17 +149,17 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
         # X[:,:,8:12] = img
 
-        # img = self.specs['fix_common_p1'][row.eeg_id] # (128, 128, 8)
-        # img_tmp = np.zeros((128, 256, 4))
-        # for i in range(4):
-        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        # X[:,:,4:8] = img_tmp
+        img = self.specs['common_cwt_mexh_p1'][row.eeg_id] # (128, 128, 8)
+        img_tmp = np.zeros((128, 256, 4))
+        for i in range(4):
+            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        X[:,:,4:8] = img_tmp
 
-        # img = self.specs['fix_common_p2'][row.eeg_id] # (128, 128, 8)
-        # img_tmp = np.zeros((128, 256, 4))
-        # for i in range(4):
-        #     img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
-        # X[:,:,8:12] = img_tmp
+        img = self.specs['common_cwt_mexh_p2'][row.eeg_id] # (128, 128, 8)
+        img_tmp = np.zeros((128, 256, 4))
+        for i in range(4):
+            img_tmp[:, :, i] += np.hstack((img[:, :, 2*i], img[:, :, 2*i+1]))
+        X[:,:,8:12] = img_tmp
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
