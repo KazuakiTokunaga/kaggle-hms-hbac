@@ -422,6 +422,11 @@ class Runner():
             ext_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
             ext_data['patient_id'] = ext_data['patient_id'] * 10**6 # patient_idを被らないようにする
             ext_data['total_evaluators'] = -1
+
+            # otherが多すぎるので減らす            
+            ext_data = ext_data[(ext_data['other_vote']>0.75) & ((ext_data['eeg_id'] // 100) % 5 == 0)]
+            ext_data = ext_data[(ext_data['other_vote']>0.4) & (ext_data['other_vote']<=0.75) & ((ext_data['eeg_id'] // 100) % 3 == 0)].reset_index()
+
             ext_data['target'] = 'Ext'
             ext_data[['min', 'max']] = 0
             ext_data = ext_data[train.columns]
