@@ -429,7 +429,7 @@ class Runner():
                 ext_data = ext_data.iloc[:100]
 
             # todo
-            train = pd.concat([train, ext_data])
+            train = pd.concat([train, ext_data]).reset_index()
             logger.info(f'Train shape after adding external data: {train.shape}')
 
         # Create Fold
