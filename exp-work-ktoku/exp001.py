@@ -411,14 +411,6 @@ class Runner():
         else:
             train = get_train_df(df)
 
-        # compute kl-loss with uniform distribution by pytorch
-        labels = train[TARGETS].values + 1e-5
-        train['kl'] = torch.nn.functional.kl_div(
-            torch.log(torch.tensor(labels)),
-            torch.tensor([1 / 6] * 6),
-            reduction='none'
-        ).sum(dim=1).numpy()
-
         if RCFG.DEBUG:
             train = train.iloc[:RCFG.DEBUG_SIZE]
 
