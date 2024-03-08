@@ -420,6 +420,7 @@ class Runner():
         if RCFG.ADD_EXTERNAL_DATA:
             logger.info('Add external data.')
             ext_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
+            ext_data['patient_id'] = ext_data['patient_id'] * 10**6 # patient_idを被らないようにする
             ext_data['total_evaluators'] = -1
             ext_data['target'] = 'Ext'
             ext_data[['min', 'max']] = 0
