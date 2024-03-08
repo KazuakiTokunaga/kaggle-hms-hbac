@@ -422,7 +422,6 @@ class Runner():
             ext_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
             ext_data['total_evaluators'] = -1
             ext_data['target'] = 'Ext'
-            ext_data['spectrogram_id'] = ext_data['eeg_id']
             ext_data[['min', 'max']] = 0
             ext_data = ext_data[train.columns]
 
