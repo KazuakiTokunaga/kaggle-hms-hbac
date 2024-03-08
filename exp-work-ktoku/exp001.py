@@ -42,9 +42,10 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v3']
+    USE_SPECTROGRAMS = ['kaggle', 'chris']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
+    ADD_EXTERNAL_DATA = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -134,9 +135,9 @@ class HMSDataset(Dataset):
             x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # # Chris
-        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # Chris
+        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
+        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v2
         # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
@@ -146,9 +147,9 @@ class HMSDataset(Dataset):
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        img = self.specs['fix_cwt_mexh_v3'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # img = self.specs['fix_cwt_mexh_v3'][row.eeg_id] # (64, 512, 4)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # v11
         # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
@@ -186,16 +187,16 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -209,7 +210,7 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2], axis=1) # (512, 768, 1)
         # X = np.concatenate([X, x11], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
@@ -424,6 +425,22 @@ class Runner():
         train = train.reset_index()
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
+        if RCFG.ADD_EXTERNAL_DATA:
+            logger.info('Add external data.')
+            ext_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
+            ext_data['total_evaluators'] = -1
+            ext_data['target'] = 'Ext'
+            ext_data['spectrogram_id'] = ext_data['eeg_id']
+            ext_data[['min', 'max']] = 0
+            ext_data = ext_data[train.columns]
+
+            if RCFG.DEBUG:
+                ext_data = ext_data.iloc[:100]
+
+            # todo
+            train = pd.concat([train, ext_data])
+            logger.info(f'Train shape after adding external data: {train.shape}')
+
         # Create Fold
         train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
 
@@ -461,6 +478,11 @@ class Runner():
         for name in RCFG.USE_SPECTROGRAMS:
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
+
+        if RCFG.ADD_EXTERNAL_DATA:
+            for name in RCFG.USE_SPECTROGRAMS:
+                logger.info(f'Loading external spectrograms eeg_spec_{name}.py')
+                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/tuh_eeg_seizure_corpus/eeg_specs_{name}.npy',allow_pickle=True).item())
 
     def run_train(self, ):
 
