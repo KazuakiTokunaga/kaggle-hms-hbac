@@ -42,10 +42,9 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'chris']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
-    ADD_EXTERNAL_DATA = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -135,9 +134,9 @@ class HMSDataset(Dataset):
             x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # # Chris
+        # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v2
         # img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
@@ -187,16 +186,16 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        # img = np.clip(img,np.exp(-4),np.exp(8))
-        # img = np.log(img)
-        # ep = 1e-6
-        # m = np.nanmean(img.flatten())
-        # s = np.nanstd(img.flatten())
-        # img = (img-m)/(s+ep)
-        # img = np.nan_to_num(img, nan=0.0)
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -417,29 +416,6 @@ class Runner():
         train = train.reset_index()
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
-        if RCFG.ADD_EXTERNAL_DATA:
-            logger.info('Add external data.')
-            ext_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
-            ext_data['patient_id'] = ext_data['patient_id'] * 10**6 # patient_idを被らないようにする
-            ext_data['total_evaluators'] = -1
-
-            # otherが多すぎるので減らす
-            # exclude_cond = (ext_data['other_vote']>0.75) & ((ext_data['eeg_id'] // 100) % 5 != 0)
-            # ext_data = ext_data[~exclude_cond].reset_index()
-            # exclude_cond = (ext_data['other_vote']>0.4) & (ext_data['other_vote']<=0.75) & ((ext_data['eeg_id'] // 100) % 3 != 0)
-            # ext_data = ext_data[~exclude_cond].reset_index()
-
-            ext_data['target'] = 'Ext'
-            ext_data[['min', 'max']] = 0
-            ext_data = ext_data[train.columns]
-
-            if RCFG.DEBUG:
-                ext_data = ext_data.iloc[:100]
-
-            # todo
-            train = pd.concat([train, ext_data]).reset_index()
-            logger.info(f'Train shape after adding external data: {train.shape}')
-
         # Create Fold
         train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
 
@@ -478,11 +454,6 @@ class Runner():
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
-        if RCFG.ADD_EXTERNAL_DATA:
-            for name in RCFG.USE_SPECTROGRAMS:
-                logger.info(f'Loading external spectrograms eeg_spec_{name}.py')
-                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/tuh_eeg_seizure_corpus/eeg_specs_{name}.npy',allow_pickle=True).item())
-
     def run_train(self, ):
 
         TARGETS_OOF = [f"{c}_oof" for c in TARGETS]
@@ -490,59 +461,17 @@ class Runner():
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
         train_2nd = self.train[self.train['stage']==2]
-        train_ext = self.train[self.train['target']=='Ext']
         
         for fold_id in fold_lists:
 
             logger.info(f'###################################### Fold {fold_id+1}')
-            train_index = self.train[(self.train['target']!='Ext')&(self.train.fold != fold_id)].index
+            train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
             
             valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
             true = valid_df[TARGETS].values
             valid_2nd_index = valid_df[valid_df['stage']==2].index
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
-
-            valid_dataset = HMSDataset(
-                self.train.iloc[valid_index],
-                self.all_spectrograms
-            )
-            valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
-
-            ################################## external data
-            train_ext_index = train_ext[train_ext.fold != fold_id].index
-            logger.info(f'train_ext_index length: {len(train_ext_index)}')
-            train_dataset = HMSDataset(
-                train_ext.loc[train_ext_index],
-                self.all_spectrograms
-            )
-            train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
-
-            # モデルの構築
-            model = HMSModel().to(torch.device(RCFG.DEVICE))
-            optimizer = optim.AdamW(model.parameters(),lr=0.002)
-            lr_schedule = {0: 2e-3, 1: 2e-3, 2: 1e-4}
-            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
-            criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
-
-            # トレーニングループ
-            for epoch in range(1, 3):
-                model, oof, tr_loss, val_loss = train_model(
-                    model, 
-                    train_loader, 
-                    valid_loader,
-                    optimizer,
-                    scheduler,
-                    criterion
-                )
-                
-                oof = np.concatenate(oof).copy()
-                valid_2nd_loss = get_cv_score(oof[valid_2nd_index], true[valid_2nd_index])
-
-                # エポックごとのログを出力
-                logger.info(f'Epoch {epoch}, Train Loss: {np.round(tr_loss, 6)}, Valid Loss: {np.round(val_loss, 6)}, Valid 2nd Loss: {np.round(valid_2nd_loss, 6)}')
-            
-            ################################## external data
             
             # データローダーの作成
             train_dataset = HMSDataset(
@@ -551,8 +480,18 @@ class Runner():
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
-            # model = HMSModel().to(torch.device(RCFG.DEVICE))
+            valid_dataset = HMSDataset(
+                self.train.iloc[valid_index],
+                self.all_spectrograms
+            )
+            valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
+
+            # モデルの構築
+            model = HMSModel().to(torch.device(RCFG.DEVICE))
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
+            # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
+            # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
+            # 学習率スケジュールを定義
             lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-4, 3: 1e-4}
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
