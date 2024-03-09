@@ -424,10 +424,10 @@ class Runner():
             ext_data['total_evaluators'] = -1
 
             # otherが多すぎるので減らす
-            # exclude_cond = (ext_data['other_vote']>0.75) & ((ext_data['eeg_id'] // 100) % 5 != 0)
-            # ext_data = ext_data[~exclude_cond].reset_index()
-            # exclude_cond = (ext_data['other_vote']>0.4) & (ext_data['other_vote']<=0.75) & ((ext_data['eeg_id'] // 100) % 3 != 0)
-            # ext_data = ext_data[~exclude_cond].reset_index()
+            exclude_cond = (ext_data['other_vote']>0.75) & ((ext_data['eeg_id'] // 100) % 5 != 0)
+            ext_data = ext_data[~exclude_cond].reset_index()
+            exclude_cond = (ext_data['other_vote']>0.4) & (ext_data['other_vote']<=0.75) & ((ext_data['eeg_id'] // 100) % 3 != 0)
+            ext_data = ext_data[~exclude_cond].reset_index()
 
             ext_data['target'] = 'Ext'
             ext_data[['min', 'max']] = 0
