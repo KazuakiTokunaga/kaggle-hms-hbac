@@ -513,7 +513,7 @@ class Runner():
             train_ext_index = train_ext[train_ext.fold != fold_id].index
             logger.info(f'train_ext_index length: {len(train_ext_index)}')
             train_dataset = HMSDataset(
-                train_ext[train_ext_index],
+                train_ext.loc[train_ext_index],
                 self.all_spectrograms
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
