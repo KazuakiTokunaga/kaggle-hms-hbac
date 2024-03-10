@@ -234,7 +234,7 @@ class HMSDataset(Dataset):
         return transforms(image=img)['image']
     
     def __apply_label_smoothing(self, labels, smoothing=0.1):
-        labels = labels * (1 - smoothing) + (smoothing / labels.shape[1])
+        labels = labels * (1 - smoothing) + (smoothing / labels.shape[0])
         labels /= labels.sum(axis=1, keepdims=True)  # 再正規化
         return labels
 
