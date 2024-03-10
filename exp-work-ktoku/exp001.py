@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'fix_cwt_mexh_v23']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
