@@ -58,6 +58,7 @@ class CFG:
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
     TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
     SAVE_BEST = False # Falseのときは最後のモデルを保存
+    SMOOTHING = True
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -79,6 +80,7 @@ class HMSDataset(Dataset):
         all_spectrograms,
         augment=CFG.AUGMENT, 
         mode='train',
+        smoothing=False
     ):
 
         self.data = data
@@ -86,6 +88,7 @@ class HMSDataset(Dataset):
         self.mode = mode
         self.specs = all_spectrograms
         self.indexes = np.arange( len(self.data))
+        self.smoothing = smoothing
 
     def __len__(self):
         return len(self.data)
@@ -106,8 +109,11 @@ class HMSDataset(Dataset):
 
         row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
+        
         if self.mode!='test':
             y = row.loc[TARGETS]
+            if self.smoothing:
+                y = self.__apply_label_smoothing(y)
 
         if self.mode=='test':
             r = 0
@@ -151,7 +157,7 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v23'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -226,6 +232,11 @@ class HMSDataset(Dataset):
             A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
         ])
         return transforms(image=img)['image']
+    
+    def __apply_label_smoothing(self, labels, smoothing=0.1):
+        labels = labels * (1 - smoothing) + (smoothing / labels.shape[1])
+        labels /= labels.sum(axis=1, keepdims=True)  # 再正規化
+        return labels
 
 
 class HMSModel(nn.Module):
@@ -479,7 +490,8 @@ class Runner():
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
-                self.all_spectrograms
+                self.all_spectrograms,
+                smoothing = CFG.SMOOTHING
             )
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
