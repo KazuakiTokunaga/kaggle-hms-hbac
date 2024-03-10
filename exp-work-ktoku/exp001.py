@@ -89,7 +89,6 @@ class HMSDataset(Dataset):
         self.specs = all_spectrograms
         self.indexes = np.arange( len(self.data))
         self.smoothing = smoothing
-        self.log_smoothing = True
 
     def __len__(self):
         return len(self.data)
@@ -235,11 +234,7 @@ class HMSDataset(Dataset):
         return transforms(image=img)['image']
     
     def __apply_label_smoothing(self, labels, smoothing=0.1):
-        
-        if self.log_smoothing:
-            logger.info(f'Apply label smoothing: {smoothing}')
-            self.log_smoothing = False
-            
+
         labels = labels * (1 - smoothing) + (smoothing / labels.shape[0])
         labels /= labels.sum()  # 再正規化
         return labels
