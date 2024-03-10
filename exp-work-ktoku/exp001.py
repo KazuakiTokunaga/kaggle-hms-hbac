@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v27']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
@@ -58,7 +58,7 @@ class CFG:
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
     TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
     SAVE_BEST = False # Falseのときは最後のモデルを保存
-    SMOOTHING = True
+    SMOOTHING = False
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -157,7 +157,7 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v27'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
