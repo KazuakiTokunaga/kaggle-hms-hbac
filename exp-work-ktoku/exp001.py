@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
+    USE_SPECTROGRAMS = ['cwt_v11', 'fix_cwt_mexh_v38']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
@@ -120,25 +120,25 @@ class HMSDataset(Dataset):
         else:
             r = int( (row['min'] + row['max'])//4 )
 
-        x_tmp = np.zeros((128, 256, 4), dtype='float32')
-        for k in range(4):
-            # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+        # x_tmp = np.zeros((128, 256, 4), dtype='float32')
+        # for k in range(4):
+        #     # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
+        #     img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
 
-            # LOG TRANSFORM SPECTROGRAM
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
+        #     # LOG TRANSFORM SPECTROGRAM
+        #     img = np.clip(img,np.exp(-4),np.exp(8))
+        #     img = np.log(img)
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
+        #     # STANDARDIZE PER IMAGE
+        #     ep = 1e-6
+        #     m = np.nanmean(img.flatten())
+        #     s = np.nanstd(img.flatten())
+        #     img = (img-m)/(s+ep)
+        #     img = np.nan_to_num(img, nan=0.0)
 
-            # CROP TO 256 TIME STEPS
-            x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
-        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        #     # CROP TO 256 TIME STEPS
+        #     x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
+        # x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # Chris
         # img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
@@ -218,7 +218,7 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([x2, x3], axis=1) # (512, 768, 1)
         # X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
