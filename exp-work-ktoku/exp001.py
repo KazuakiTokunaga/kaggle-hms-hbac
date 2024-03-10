@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v27', 'fix_cqt_v3']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v26']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
@@ -151,7 +151,7 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v27'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['fix_cwt_mexh_v26'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -174,8 +174,8 @@ class HMSDataset(Dataset):
         #     img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)  # (256, 384, 2)
         # x4 = np.concatenate((img_tmp[:, :, 0:1], img_tmp[:, :, 1:2]), axis=1) # (256, 768, 1)
 
-        img = self.specs['fix_cqt_v3'][row.eeg_id] # (64, 768, 4)
-        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
+        # img = self.specs['fix_cqt_v3'][row.eeg_id] # (64, 768, 4)
+        # x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -213,7 +213,7 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
         X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
+        # X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
