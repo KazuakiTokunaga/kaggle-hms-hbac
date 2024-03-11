@@ -486,6 +486,7 @@ class Runner():
 
         if RCFG.ADD_MIXUP_DATA:
             for name in RCFG.USE_SPECTROGRAMS:
+                if name == 'kaggle': continue
                 logger.info(f'Loading mixup spectrograms eeg_spec_{name}.py')
                 self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_mixup_{name}.npy',allow_pickle=True).item())
 
