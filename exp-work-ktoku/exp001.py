@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38', 'fix_cqt_v5']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
 
@@ -180,8 +180,8 @@ class HMSDataset(Dataset):
         #     img_tmp[:, :, i] += np.concatenate((img[:, :, 2*i], img[:, :, 2*i+1]), axis=0)  # (256, 384, 2)
         # x4 = np.concatenate((img_tmp[:, :, 0:1], img_tmp[:, :, 1:2]), axis=1) # (256, 768, 1)
 
-        img = self.specs['fix_cqt_v5'][row.eeg_id] # (64, 768, 4)
-        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
+        # img = self.specs['fix_cqt_v5'][row.eeg_id] # (64, 768, 4)
+        # x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -218,8 +218,9 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
+        # X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3], axis=2) # (512, 256, 3)
+        # X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
@@ -252,7 +253,7 @@ class HMSModel(nn.Module):
         self.base_model.classifier = self.fc
 
     def forward(self, x):
-        x = x.repeat(1, 1, 1, 3) 
+        # x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
         x = self.base_model(x)
 
