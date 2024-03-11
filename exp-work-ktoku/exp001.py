@@ -459,7 +459,7 @@ class Runner():
         # https://github.com/KazuakiTokunaga/kaggle-hms-hbac/blob/4bd0b26b5f2ebc2828a38a8651f3c49c1127b960/exp-work-ktoku/exp001.py
         if RCFG.ADD_MIXUP_DATA:
             logger.info('Add external data.')
-            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
+            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup.csv')
             mixup_data = mixup_data[train.columns]
             mixup_data['target'] = 'Ext'
 
