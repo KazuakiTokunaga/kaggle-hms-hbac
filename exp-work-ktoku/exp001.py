@@ -45,6 +45,7 @@ class RCFG:
     USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
+    ADD_MIXUP_DATA = True
 
 class CFG:
     """モデルに関連する設定"""
@@ -455,6 +456,19 @@ class Runner():
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
+        # https://github.com/KazuakiTokunaga/kaggle-hms-hbac/blob/4bd0b26b5f2ebc2828a38a8651f3c49c1127b960/exp-work-ktoku/exp001.py
+        if RCFG.ADD_MIXUP_DATA:
+            logger.info('Add external data.')
+            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/tuh_eeg_seizure.csv')
+            mixup_data = mixup_data[train.columns]
+            mixup_data['target'] = 'Ext'
+
+            if RCFG.DEBUG:
+                mixup_data = mixup_data.iloc[:100]
+
+            train = pd.concat([train, mixup_data]).reset_index()
+            logger.info(f'Train shape after adding external data: {train.shape}')
+
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
             pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
@@ -470,6 +484,11 @@ class Runner():
             logger.info(f'Loading spectrograms eeg_spec_{name}.py')
             self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
 
+        if RCFG.ADD_MIXUP_DATA:
+            for name in RCFG.USE_SPECTROGRAMS:
+                logger.info(f'Loading mixup spectrograms eeg_spec_{name}.py')
+                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_mixup_{name}.npy',allow_pickle=True).item())
+
     def run_train(self, ):
 
         TARGETS_OOF = [f"{c}_oof" for c in TARGETS]
@@ -482,9 +501,9 @@ class Runner():
 
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
-            valid_index = self.train[self.train.fold == fold_id].index
+            valid_index = self.train[(self.train.fold == fold_id)&(self.train.target != 'Ext')].index
             
-            valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
+            valid_df = self.train[(self.train.fold == fold_id)&(self.train.target != 'Ext')].reset_index().copy()
             true = valid_df[TARGETS].values
             valid_2nd_index = valid_df[valid_df['stage']==2].index
             train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
