@@ -458,7 +458,7 @@ class Runner():
         # https://github.com/KazuakiTokunaga/kaggle-hms-hbac/blob/4bd0b26b5f2ebc2828a38a8651f3c49c1127b960/exp-work-ktoku/exp001.py
         if RCFG.ADD_MIXUP_DATA:
             logger.info('Add external data.')
-            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup.csv')
+            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
             mixup_data = mixup_data[train.columns]
             mixup_data['target'] = 'Ext'
 
@@ -487,7 +487,7 @@ class Runner():
             for name in RCFG.USE_SPECTROGRAMS:
                 if name == 'kaggle': continue
                 logger.info(f'Loading mixup spectrograms eeg_spec_{name}.py')
-                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_mixup_{name}.npy',allow_pickle=True).item())
+                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_mixup_v2_{name}.npy',allow_pickle=True).item())
 
     def run_train(self, ):
 
