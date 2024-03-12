@@ -514,6 +514,7 @@ class Runner():
                 self.all_spectrograms,
                 smoothing = CFG.SMOOTHING
             )
+            logger.info('Length of train_dataset: ', len(train_dataset))
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
@@ -571,6 +572,7 @@ class Runner():
                     train_2nd.loc[train_2nd_index],
                     self.all_spectrograms
                 )
+                logger.info('Length of train_dataset: ', len(train_dataset))
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
                 optimizer = optim.AdamW(model.parameters(),lr=1e-4)
