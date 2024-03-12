@@ -463,9 +463,10 @@ class Runner():
         if RCFG.ADD_MIXUP_DATA:
             logger.info('Add external data.')
             mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
+            mixup_data['2nd_sampling'] = 1
             mixup_data = mixup_data[train.columns]
             mixup_data['target'] = 'Ext'
-            mixup_data['2nd_sampling'] = 1
+            
 
             if RCFG.DEBUG:
                 mixup_data = mixup_data.iloc[:100]
