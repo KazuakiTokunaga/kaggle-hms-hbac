@@ -219,14 +219,13 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
-        # X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        X = np.concatenate([x1, x2, x3], axis=2) # (512, 256, 3)
+        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
         # X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
 
-        return X, y # (768, 768, 1), (6)
+        return X, y # (), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -254,7 +253,7 @@ class HMSModel(nn.Module):
         self.base_model.classifier = self.fc
 
     def forward(self, x):
-        # x = x.repeat(1, 1, 1, 3) 
+        x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
         x = self.base_model(x)
 
