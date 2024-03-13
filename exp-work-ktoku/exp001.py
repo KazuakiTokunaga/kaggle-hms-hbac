@@ -42,10 +42,10 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cgau3', 'cwt_cgau3_10sec']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
-    ADD_MIXUP_DATA = True
+    ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
@@ -158,7 +158,12 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cgau3'][row.eeg_id] # (64, 512, 4)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+
+        # (64, 512, 4)型
+        img = self.specs['cwt_cgau3_10sec'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -196,16 +201,16 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # v5
         # img = self.specs['cwt_v5'][row.eeg_id] # (64, 256, 4)
@@ -457,17 +462,13 @@ class Runner():
 
         rng = np.random.default_rng()
         train['random_value'] = rng.random(len(train))
-        train['2nd_sampling'] = train.apply(lambda x: 0 if x['stage']==2 and x['random_value'] < 0.3 else 1, axis=1)
         train = train.drop('random_value', axis=1)
 
         if RCFG.ADD_MIXUP_DATA:
             logger.info('Add external data.')
             mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
-            mixup_data['2nd_sampling'] = 1
             mixup_data = mixup_data[train.columns]
             mixup_data['target'] = 'Ext'
-            
-
             if RCFG.DEBUG:
                 mixup_data = mixup_data.iloc[:100]
 
@@ -506,13 +507,13 @@ class Runner():
         for fold_id in fold_lists:
 
             logger.info(f'###################################### Fold {fold_id+1}')
-            train_index = self.train[(self.train.fold != fold_id)&(self.train['2nd_sampling']==1)].index
-            valid_index = self.train[(self.train.fold == fold_id)&(self.train.target != 'Ext')].index
+            train_index = self.train[self.train.fold != fold_id].index
+            valid_index = self.train[self.train.fold == fold_id].index
             
-            valid_df = self.train[(self.train.fold == fold_id)&(self.train.target != 'Ext')].reset_index().copy()
+            valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
             true = valid_df[TARGETS].values
             valid_2nd_index = valid_df[valid_df['stage']==2].index
-            train_2nd_index = train_2nd[(train_2nd.fold != fold_id)&(train_2nd['2nd_sampling']==1)].index
+            train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
             
             # データローダーの作成
             train_dataset = HMSDataset(
