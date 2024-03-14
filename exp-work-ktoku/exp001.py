@@ -42,14 +42,14 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38', 'fix_cqt_v3']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet101d'
+    MODEL_NAME = 'efficientnet_b2'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -168,8 +168,8 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # (64, 768, 4)型
-        # img = self.specs['fix_cqt_v6'][row.eeg_id] # (64, 768, 4)
-        # x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
+        img = self.specs['fix_cqt_v3'][row.eeg_id] # (64, 768, 4)
+        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 768, 1)
 
         # cqt
         # img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
@@ -195,9 +195,7 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
         X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
-        # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
-        # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
+        X = np.concatenate([X, x4], axis=0) # (768, 768, 1)
 
         return X, y # (), (6)
 
@@ -221,10 +219,10 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        # self.base_model.classifier = self.fc
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
