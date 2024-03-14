@@ -227,7 +227,7 @@ class HMSModel(nn.Module):
         self.base_model.classifier = self.fc
 
     def forward(self, x):
-        # x = x.repeat(1, 1, 1, 3) 
+        x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
         x = self.base_model(x)
 
