@@ -636,8 +636,8 @@ class Runner():
             del aux
         
         gc.collect()
+        TMP = Path(ROOT_PATH) / "tmp"
         if RCFG.CREATE_SPECS:
-            TMP = Path(ROOT_PATH) / "tmp"
             TMP.mkdir(exist_ok=True)
             
             converted_specs = {}            
