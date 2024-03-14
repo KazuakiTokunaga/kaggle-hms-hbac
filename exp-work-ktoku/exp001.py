@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38', 'cwt_mexh_middle_10sec', 'cwt_mexh_middle', 'cwt_mexh_high', 'cwt_mexh_high_10sec']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor', 'cwt_cmor_10sec']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -146,46 +146,26 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        # img = self.specs['cwt_cgau3'][row.eeg_id] # (64, 512, 4)
-        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
-
-        # v11
-        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        img = self.specs['cwt_cmor'][row.eeg_id] # (64, 512, 4)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cmor_10sec'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_middle'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
-
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_middle_10sec'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x5 = img.transpose(1, 0, 2) # (512, 256, 1)
-
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_high'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x6 = img.transpose(1, 0, 2) # (512, 256, 1)
-
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_high_10sec'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x7 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # # v11
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = np.clip(img,np.exp(-4),np.exp(8))
+        # img = np.log(img)
+        # ep = 1e-6
+        # m = np.nanmean(img.flatten())
+        # s = np.nanstd(img.flatten())
+        # img = (img-m)/(s+ep)
+        # img = np.nan_to_num(img, nan=0.0)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # (64, 768, 4)型
         # img = self.specs['fix_cqt_v6'][row.eeg_id] # (64, 768, 4)
@@ -215,9 +195,6 @@ class HMSDataset(Dataset):
         # x3 = np.concatenate([img[:, :, i:i+1] for i in range(2)], axis=0) # (256, 256, 1)
 
         X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
-        X2 = np.concatenate([x1, x4, x5], axis=1) # (512, 768, 1)
-        X3 = np.concatenate([x1, x6, x7], axis=1) # (512, 768, 1)
-        X = np.concatenate([X, X2, X3], axis=2) # (512, 768, 3)
         # x_t2 = np.concatenate([x4, x5], dim=0) #(768, 256, 1)
         # x_t2 = x_t2.transpose(1, 0, 2) # (256, 768, 1)
         # x = np.concatenate([x_t, x_t2], dim=0) # (768, 768, 1)
