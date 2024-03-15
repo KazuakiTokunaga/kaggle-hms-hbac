@@ -145,10 +145,22 @@ class HMSDataset(Dataset):
         # img = self.specs['cwt_v9'][row.eeg_id] # (128, 256, 4)
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # (64, 512, 4)型
+        # v11
         img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = np.clip(img,np.exp(-4),np.exp(8))
+        img = np.log(img)
+        ep = 1e-6
+        m = np.nanmean(img.flatten())
+        s = np.nanstd(img.flatten())
+        img = (img-m)/(s+ep)
+        img = np.nan_to_num(img, nan=0.0)
+        img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+
+        # (64, 512, 4)型
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
         img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
