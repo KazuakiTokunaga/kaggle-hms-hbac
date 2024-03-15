@@ -42,14 +42,14 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v54']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet101d'
+    MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -163,7 +163,7 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['fix_cwt_mexh_v54'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -231,10 +231,10 @@ class HMSModel(nn.Module):
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         # EfficientNetで必要
-        # self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        # self.base_model.classifier = self.fc
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
