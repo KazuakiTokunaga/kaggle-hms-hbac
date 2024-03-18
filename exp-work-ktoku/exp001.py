@@ -74,6 +74,28 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b7": 2560
 }
 
+def eeg_fill_na(x):
+    m = np.nanmean(x)
+    if np.isnan(x).mean()<1: 
+        x = np.nan_to_num(x,nan=m)
+    else: 
+        x[:] = 0
+
+    return x
+
+def standardize_img(img):
+
+    img = np.clip(img,np.exp(-4),np.exp(8))
+    img = np.log(img)
+    
+    ep = 1e-6
+    m = np.nanmean(img.flatten())
+    s = np.nanstd(img.flatten())
+    img = (img-m)/(s+ep)
+    img = np.nan_to_num(img, nan=0.0)
+
+    return img
+
 class HMSDataset(Dataset):
     def __init__(
         self, 
@@ -121,11 +143,14 @@ class HMSDataset(Dataset):
         else:
             r = int( (row['min'] + row['max'])//4 )
 
+        img = self.specs['kaggle'][row.spectrogram_id]
+        img = eeg_fill_na(img)
+        img = standardize_img(img)
+
         x_tmp = np.zeros((128, 256, 4), dtype='float32')
         for k in range(4):
-            # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
-            x_tmp[14:-14,:,k] = img[:,22:-22]
+            img_t = img[r:r+300,k*100:(k+1)*100].T
+            x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
             # LOG TRANSFORM SPECTROGRAM
             # img = np.clip(img,np.exp(-4),np.exp(8))
@@ -141,15 +166,6 @@ class HMSDataset(Dataset):
             # # CROP TO 256 TIME STEPS
             # x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
 
-        x_tmp = np.clip(x_tmp,np.exp(-4),np.exp(8))
-        x_tmp = np.log(x_tmp)
-        ep = 1e-6
-        m = np.nanmean(x_tmp.flatten())
-        s = np.nanstd(x_tmp.flatten())
-        x_tmp = (x_tmp-m)/(s+ep)
-        x_tmp = np.nan_to_num(x_tmp, nan=0.0)
-        x_tmp /= 2.0
-
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v9
@@ -158,13 +174,7 @@ class HMSDataset(Dataset):
 
         # # v11
         img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
+        img = standardize_img(img)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
