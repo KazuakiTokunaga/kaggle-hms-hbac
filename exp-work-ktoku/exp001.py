@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_v64', 'fix_cwt_mexh_v54']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v54']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -125,20 +125,31 @@ class HMSDataset(Dataset):
         for k in range(4):
             # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
             img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+            x_tmp[14:-14,:,k] = img[:,22:-22]
 
             # LOG TRANSFORM SPECTROGRAM
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
+            # img = np.clip(img,np.exp(-4),np.exp(8))
+            # img = np.log(img)
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
+            # # STANDARDIZE PER IMAGE
+            # ep = 1e-6
+            # m = np.nanmean(img.flatten())
+            # s = np.nanstd(img.flatten())
+            # img = (img-m)/(s+ep)
+            # img = np.nan_to_num(img, nan=0.0)
 
-            # CROP TO 256 TIME STEPS
-            x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
+            # # CROP TO 256 TIME STEPS
+            # x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
+
+        x_tmp = np.clip(x_tmp,np.exp(-4),np.exp(8))
+        x_tmp = np.log(x_tmp)
+        ep = 1e-6
+        m = np.nanmean(x_tmp.flatten())
+        s = np.nanstd(x_tmp.flatten())
+        x_tmp = (x_tmp-m)/(s+ep)
+        x_tmp = np.nan_to_num(x_tmp, nan=0.0)
+        x_tmp /= 2.0
+
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v9
