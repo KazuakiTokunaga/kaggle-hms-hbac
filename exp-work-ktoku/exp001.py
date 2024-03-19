@@ -42,7 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_v65', 'cwt_mexh_10sec_v65']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_v11', 'fix_cwt_mexh_v38']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -143,27 +143,28 @@ class HMSDataset(Dataset):
         else:
             r = int( (row['min'] + row['max'])//4 )
 
-        # img = self.specs['kaggle'][row.spectrogram_id]
-        # img = eeg_fill_na(img)
-        # img = standardize_img(img)
+        img = self.specs['kaggle'][row.spectrogram_id]
+        img = eeg_fill_na(img)
+        img = standardize_img(img)
 
         x_tmp = np.zeros((128, 256, 4), dtype='float32')
         for k in range(4):
-            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+            img_t = img[r:r+300,k*100:(k+1)*100].T
+            x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
             # LOG TRANSFORM SPECTROGRAM
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
+            # img = np.clip(img,np.exp(-4),np.exp(8))
+            # img = np.log(img)
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
+            # # STANDARDIZE PER IMAGE
+            # ep = 1e-6
+            # m = np.nanmean(img.flatten())
+            # s = np.nanstd(img.flatten())
+            # img = (img-m)/(s+ep)
+            # img = np.nan_to_num(img, nan=0.0)
 
-            # CROP TO 256 TIME STEPS
-            x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
+            # # CROP TO 256 TIME STEPS
+            # x_tmp[14:-14,:,k] = img[:,22:-22] / 2.0
 
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
@@ -172,7 +173,7 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v11
-        img = self.specs['cwt_mexh_v65'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
         img = standardize_img(img)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
@@ -185,7 +186,7 @@ class HMSDataset(Dataset):
         # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v65'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['fix_cwt_mexh_v38'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
