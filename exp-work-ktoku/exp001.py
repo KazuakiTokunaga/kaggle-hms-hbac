@@ -186,7 +186,7 @@ class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
 
-        self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=1, stride=1, padding=0)
+        self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
         self.relu = nn.ReLU()
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
