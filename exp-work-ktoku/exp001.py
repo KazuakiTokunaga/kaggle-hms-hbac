@@ -175,7 +175,8 @@ class HMSDataset(Dataset):
 
         # X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
 
-        return X, y # (), (6)
+        # return X, y # (), (6)
+        return x1, y
 
     def _augment_batch(self, img):
         transforms = A.Compose([
