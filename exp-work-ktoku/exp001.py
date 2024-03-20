@@ -207,6 +207,7 @@ class HMSModel(nn.Module):
         # x = x.repeat(1, 1, 1, 3) 
         x = self.conv2d(x)
         x = self.relu(x)
+        logger.info(f'x.shape: {x.shape}')
 
         x = x.permute(0, 3, 1, 2)
         x = self.base_model(x)
