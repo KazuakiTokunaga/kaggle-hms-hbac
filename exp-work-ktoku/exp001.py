@@ -42,8 +42,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    # USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
-    USE_SPECTROGRAMS = ['kaggle']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -164,19 +163,18 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        # img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
-        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
-        # img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4)
-        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
 
-        # return X, y # (), (6)
-        return x1, y
+        return X, y # (), (6)
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -207,11 +205,8 @@ class HMSModel(nn.Module):
     def forward(self, x):
         # x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
-
         x = self.conv2d(x)
         x = self.relu(x)
-        logger.info(f'x.shape: {x.shape}')
-
         x = self.base_model(x)
 
         return x
