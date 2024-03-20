@@ -65,14 +65,6 @@ RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
-EFFICIENTNET_SIZE = {
-    "efficientnet_b0": 1280, 
-    "efficientnet_b2": 1408, 
-    "efficientnet_b4": 1792, 
-    "efficientnet_b5": 2048, 
-    "efficientnet_b6": 2304, 
-    "efficientnet_b7": 2560
-}
 
 def eeg_fill_na(x):
     m = np.nanmean(x)
