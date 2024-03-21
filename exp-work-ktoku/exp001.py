@@ -228,7 +228,9 @@ class HMSModel(nn.Module):
 
         # Gem Pooling
         x = self.gem(x)
+        logger.info(f'x.shape: {x.shape}')
         x = x.view(x.size(0), -1)
+        logger.info(f'x.shape: {x.shape}')
         x = self.fc(x)
 
         return x
