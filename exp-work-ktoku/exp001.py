@@ -223,14 +223,11 @@ class HMSModel(nn.Module):
         # x = self.conv2d(x)
         # x = self.relu(x)
 
-        x = self.base_model(x)
-        logger.info(f'x.shape: {x.shape}')
+        x = self.base_model(x) # (batch_size, 1280, 16, 8)
 
         # Gem Pooling
-        x = self.gem(x)
-        logger.info(f'x.shape: {x.shape}')
-        x = x.view(x.size(0), -1)
-        logger.info(f'x.shape: {x.shape}')
+        x = self.gem(x) # (batch_size, 1280, 1, 1)
+        x = x.view(x.size(0), -1) # (batch_size, 1280)
         x = self.fc(x)
 
         return x
