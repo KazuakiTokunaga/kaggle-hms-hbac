@@ -210,11 +210,10 @@ class HMSModel(nn.Module):
         self.gem = GeM(p=3, eps=1e-6)
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
 
-        in_features = self.base_model.get_classifier().in_features
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        self.fc = nn.Linear(in_features=1280, out_features=num_classes)
 
         # self.base_model.classifier = self.fc
-        self.base_model.classifier = nn.Identity()
+        # self.base_model.classifier = nn.Identity()
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
