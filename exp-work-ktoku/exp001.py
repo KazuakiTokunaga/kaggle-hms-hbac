@@ -20,6 +20,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
+from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 
 from utils import set_random_seed, create_random_id
@@ -43,8 +44,8 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     LABELS_V2 = True
-    # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
+    USE_SPECTROGRAMS = ['kaggle']
+    # USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -156,20 +157,20 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
-
         # # (64, 512, 4)型
-        img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        # # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        return X, y # (), (6)
-        # return x1, y
+        # X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+
+        # return X, y # (), (6)
+        return x1, y
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -189,7 +190,7 @@ class GeM(nn.Module):
     def __init__(self, p=3, eps=1e-6, device='cuda:0'):
         super(GeM, self).__init__()
         # pを固定値として定義
-        self.p = torch.ones(1, device=device) * p
+        self.p = Parameter(torch.ones(1, device=device) * p)
         self.eps = eps
 
     def forward(self, x):
@@ -213,7 +214,6 @@ class HMSModel(nn.Module):
         self.fc = nn.Linear(in_features=1280, out_features=num_classes)
 
         # self.base_model.classifier = self.fc
-        # self.base_model.classifier = nn.Identity()
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
