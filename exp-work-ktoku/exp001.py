@@ -225,6 +225,7 @@ class HMSModel(nn.Module):
         # x = self.relu(x)
 
         x = self.base_model(x)
+        logger.info(f'x.shape: {x.shape}')
 
         # Gem Pooling
         x = self.gem(x)
