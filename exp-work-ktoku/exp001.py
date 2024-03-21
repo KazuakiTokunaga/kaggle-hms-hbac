@@ -186,10 +186,10 @@ class HMSDataset(Dataset):
 
 
 class GeM(nn.Module):
-    def __init__(self, p=3, eps=1e-6):
+    def __init__(self, p=3, eps=1e-6, device='cuda:0'):
         super(GeM, self).__init__()
         # pを固定値として定義
-        self.p = torch.ones(1) * p
+        self.p = torch.ones(1, device=device) * p
         self.eps = eps
 
     def forward(self, x):
