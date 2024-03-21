@@ -208,7 +208,7 @@ class HMSModel(nn.Module):
         # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
         # self.relu = nn.ReLU()
         self.gem = GeM(p=3, eps=1e-6)
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
 
         in_features = self.base_model.get_classifier().in_features
         self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
