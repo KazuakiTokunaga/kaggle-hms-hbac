@@ -20,6 +20,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
+import torch.nn.functional as F
 
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
@@ -182,24 +183,51 @@ class HMSDataset(Dataset):
         return labels
 
 
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6):
+        super(GeM, self).__init__()
+        # pを固定値として定義
+        self.p = torch.ones(1) * p
+        self.eps = eps
+
+    def forward(self, x):
+        return F.avg_pool2d(
+            x.clamp(min=self.eps).pow(self.p), 
+            (x.size(-2), x.size(-1))).pow(1. / self.p)
+
+    def __repr__(self):
+        return f'GeM(p={self.p.item()}, eps={self.eps})'
+
+
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
 
-        self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
-        self.relu = nn.ReLU()
+        # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
+        # self.relu = nn.ReLU()
+        self.gem = GeM(p=3, eps=1e-6)
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
 
         in_features = self.base_model.get_classifier().in_features
         self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+
+        # self.base_model.classifier = self.fc
+        self.base_model.classifier = nn.Identity()
 
     def forward(self, x):
-        # x = x.repeat(1, 1, 1, 3) 
+        x = x.repeat(1, 1, 1, 3) 
         x = x.permute(0, 3, 1, 2)
-        x = self.conv2d(x)
-        x = self.relu(x)
+
+        # conv2d
+        # x = self.conv2d(x)
+        # x = self.relu(x)
+
         x = self.base_model(x)
+
+        # Gem Pooling
+        x = self.gem(x)
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
 
         return x
     
