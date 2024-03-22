@@ -52,7 +52,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
+    MODEL_NAME = 'efficientnet_b2'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -68,6 +68,14 @@ RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
 TARS = {'Seizure': 0, 'LPD': 1, 'GPD': 2, 'LRDA': 3, 'GRDA': 4, 'Other': 5}
 TARS2 = {x:y for y,x in TARS.items()}
+EFFICIENTNET_SIZE = {
+    "efficientnet_b0": 1280, 
+    "efficientnet_b2": 1408, 
+    "efficientnet_b4": 1792, 
+    "efficientnet_b5": 2048, 
+    "efficientnet_b6": 2304, 
+    "efficientnet_b7": 2560
+}
 
 def eeg_fill_na(x):
     m = np.nanmean(x)
@@ -211,7 +219,9 @@ class GeM(nn.Module):
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        self.fc = nn.Linear(in_features=1280, out_features=num_classes)
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        
 
         # conv2d
         # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
@@ -223,7 +233,6 @@ class HMSModel(nn.Module):
 
         # Baseline
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-        self.fc = nn.Linear(in_features=1280, out_features=num_classes)
         self.base_model.classifier = self.fc
 
     def forward(self, x):
