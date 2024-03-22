@@ -123,8 +123,7 @@ class HMSDataset(Dataset):
     def __getitem__(self, idx):
         indexes = self.indexes[idx]
         X, y = self.__data_generation(indexes)
-        if self.augment:
-            X = self._augment_batch(X)
+
         if self.mode != 'test':
             return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
         else:
@@ -141,6 +140,9 @@ class HMSDataset(Dataset):
 
         row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
+
+        if self.mode!='test':
+            y = row.loc[TARGETS]
 
         if self.mode=='test':
             r = 0
@@ -187,12 +189,12 @@ class HMSDataset(Dataset):
         return X, y # (), (6)
         # return x1, y
 
-    def _augment_batch(self, img):
-        transforms = A.Compose([
-            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0, rotate_limit=0, p=0.3, border_mode=0), # 時間軸方向のシフト
-            A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
-        ])
-        return transforms(image=img)['image']
+    # def _augment_batch(self, img):
+    #     transforms = A.Compose([
+    #         A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0, rotate_limit=0, p=0.3, border_mode=0), # 時間軸方向のシフト
+    #         A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
+    #     ])
+    #     return transforms(image=img)['image']
 
 
 class GeM(nn.Module):
