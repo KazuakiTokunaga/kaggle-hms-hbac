@@ -54,13 +54,13 @@ class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
-    EPOCHS = 3
+    EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
     AUGMENT = True
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
-    TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
+    TWO_STAGE_EPOCHS = 4 # 0のときは1stのみ
     SAVE_BEST = False # Falseのときは最後のモデルを保存
     SMOOTHING = False
 
@@ -136,16 +136,11 @@ class HMSDataset(Dataset):
         flip = False
         if self.augment and self.mode == 'train':
             rand = np.random.uniform(0, 1)
-            if rand < 0.3:
+            if rand < 0.2:
                 flip = True
 
         row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
-        
-        if self.mode!='test':
-            y = row.loc[TARGETS]
-            if self.smoothing:
-                y = self.__apply_label_smoothing(y)
 
         if self.mode=='test':
             r = 0
@@ -198,12 +193,6 @@ class HMSDataset(Dataset):
             A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
         ])
         return transforms(image=img)['image']
-    
-    def __apply_label_smoothing(self, labels, smoothing=0.1):
-
-        labels = labels * (1 - smoothing) + (smoothing / labels.shape[0])
-        labels /= labels.sum()  # 再正規化
-        return labels
 
 
 class GeM(nn.Module):
@@ -519,7 +508,8 @@ class Runner():
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
-                self.all_spectrograms
+                self.all_spectrograms,
+                mode='valid'
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
@@ -529,7 +519,7 @@ class Runner():
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
             # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
             # 学習率スケジュールを定義
-            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-4, 3: 1e-4}
+            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-3, 3: 2e-4, 4: 1e-4}
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
@@ -576,7 +566,7 @@ class Runner():
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
                 optimizer = optim.AdamW(model.parameters(),lr=1e-4)
-                lr_schedule = {0: 1e-4, 1: 1e-5, 2: 1e-5, 3: 1e-6}
+                lr_schedule = {0: 2e-4, 1: 2e-4, 2: 1e-4, 3: 1e-5, 4: 1e-5}
                 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
                 # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
                 criterion = nn.KLDivLoss(reduction='batchmean') 
