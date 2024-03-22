@@ -159,15 +159,17 @@ class HMSDataset(Dataset):
 
         # (64, 512, 4)型
         img = self.specs['cwt_cmor_v73'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(5)], axis=0) # (256, 512, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x4 = img[:, :, 4:5].copy().transpose(1, 0, 2) # (512, 64, 1)
 
         # # (64, 512, 4)型
         img = self.specs['cwt_cmor_10sec_v73'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(5)], axis=0) # (256, 512, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x5 = img[:, :, 4:5].copy().transpose(1, 0, 2) # (512, 64, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3, x4, x5], axis=1) # (512, 768, 1)
 
         return X, y # (), (6)
         # return x1, y
@@ -205,15 +207,20 @@ class GeM(nn.Module):
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-
-        # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
-        # self.relu = nn.ReLU()
-        self.gem = GeM(p=3, eps=1e-6)
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
-
         self.fc = nn.Linear(in_features=1280, out_features=num_classes)
 
-        # self.base_model.classifier = self.fc
+        # conv2d
+        # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
+        # self.relu = nn.ReLU()
+
+        # GeM Pooling
+        # self.gem = GeM(p=3, eps=1e-6)
+        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
+
+        # Baseline
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
+        self.fc = nn.Linear(in_features=1280, out_features=num_classes)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
@@ -223,12 +230,12 @@ class HMSModel(nn.Module):
         # x = self.conv2d(x)
         # x = self.relu(x)
 
-        x = self.base_model(x) # (batch_size, 1280, 16, 8)
+        x = self.base_model(x)
 
         # Gem Pooling
-        x = self.gem(x) # (batch_size, 1280, 1, 1)
-        x = x.view(x.size(0), -1) # (batch_size, 1280)
-        x = self.fc(x)
+        # x = self.gem(x) # (batch_size, 1280, 1, 1)
+        # x = x.view(x.size(0), -1) # (batch_size, 1280)
+        # x = self.fc(x)
 
         return x
     
