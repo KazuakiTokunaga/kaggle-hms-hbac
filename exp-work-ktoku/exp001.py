@@ -45,7 +45,7 @@ class RCFG:
     PSEUDO_LABELLING = False
     LABELS_V2 = True
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67', 'cwt_cmor_20sec_v77']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -57,7 +57,7 @@ class CFG:
     EPOCHS = 3
     N_SPLITS = 5
     BATCH_SIZE = 32
-    AUGMENT = False
+    AUGMENT = True
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
     TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
@@ -133,6 +133,12 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
+        flip = False
+        if self.augment and self.mode == 'train':
+            rand = np.random.uniform(0, 1)
+            if rand < 0.3:
+                flip = True
+
         row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
         
@@ -155,6 +161,8 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
+        if flip:
+            x_tmp[:,::-1,:] = x_tmp[:,::-1,:]
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v11
@@ -175,13 +183,12 @@ class HMSDataset(Dataset):
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_v77'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
+        if flip:
+            x1 = x1[::-1,:,:]
+            x2 = x2[::-1,:,:]
+            x3 = x3[::-1,:,:]
 
-
-        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
 
         return X, y # (), (6)
         # return x1, y
@@ -221,19 +228,18 @@ class HMSModel(nn.Module):
         super(HMSModel, self).__init__()
         in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
         self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        
 
         # conv2d
         # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
         # self.relu = nn.ReLU()
 
         # GeM Pooling
-        # self.gem = GeM(p=3, eps=1e-6)
-        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
+        self.gem = GeM(p=3, eps=1e-6)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
 
         # Baseline
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-        self.base_model.classifier = self.fc
+        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
@@ -246,9 +252,9 @@ class HMSModel(nn.Module):
         x = self.base_model(x)
 
         # Gem Pooling
-        # x = self.gem(x) # (batch_size, 1280, 1, 1)
-        # x = x.view(x.size(0), -1) # (batch_size, 1280)
-        # x = self.fc(x)
+        x = self.gem(x) # (batch_size, 1280, 1, 1)
+        x = x.view(x.size(0), -1) # (batch_size, 1280)
+        x = self.fc(x)
 
         return x
     
