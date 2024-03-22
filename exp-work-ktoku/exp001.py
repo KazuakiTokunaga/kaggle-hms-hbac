@@ -20,6 +20,8 @@ from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
+from torch.nn.parameter import Parameter
+import torch.nn.functional as F
 
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
@@ -40,16 +42,27 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
+    PSEUDO_LABELLING = False
+    LABELS_V2 = True
+    # USE_SPECTROGRAMS = ['kaggle']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
+    CREATE_SPECS = True
+    USE_ALL_LOW_QUALITY = False
+    ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
-    EPOCHS = 6
+    EPOCHS = 4
     N_SPLITS = 5
     BATCH_SIZE = 32
-    AUGMENT = False
+    AUGMENT = True
     EARLY_STOPPING = -1
+    TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
+    TWO_STAGE_EPOCHS = 4 # 0のときは1stのみ
+    SAVE_BEST = False # Falseのときは最後のモデルを保存
+    SMOOTHING = False
 
 RCFG.RUN_NAME = create_random_id()
 TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
@@ -64,6 +77,28 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b7": 2560
 }
 
+def eeg_fill_na(x):
+    m = np.nanmean(x)
+    if np.isnan(x).mean()<1: 
+        x = np.nan_to_num(x,nan=m)
+    else: 
+        x[:] = 0
+
+    return x
+
+def standardize_img(img):
+
+    img = np.clip(img,np.exp(-4),np.exp(8))
+    img = np.log(img)
+    
+    ep = 1e-6
+    m = np.nanmean(img.flatten())
+    s = np.nanstd(img.flatten())
+    img = (img-m)/(s+ep)
+    img = np.nan_to_num(img, nan=0.0)
+
+    return img
+
 class HMSDataset(Dataset):
     def __init__(
         self, 
@@ -71,6 +106,7 @@ class HMSDataset(Dataset):
         all_spectrograms,
         augment=CFG.AUGMENT, 
         mode='train',
+        smoothing=False
     ):
 
         self.data = data
@@ -78,6 +114,7 @@ class HMSDataset(Dataset):
         self.mode = mode
         self.specs = all_spectrograms
         self.indexes = np.arange( len(self.data))
+        self.smoothing = smoothing
 
     def __len__(self):
         return len(self.data)
@@ -96,71 +133,59 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        X = np.zeros((128,256,18),dtype='float32')
-        y = np.zeros((6),dtype='float32')
-        img = np.ones((128,256),dtype='float32')
+        flip = False
+        if self.augment and self.mode == 'train':
+            rand = np.random.uniform(0, 1)
+            if rand < 0.2:
+                flip = True
 
         row = self.data.iloc[indexes]
+        y = np.zeros((6),dtype='float32')
+
         if self.mode=='test':
             r = 0
         else:
             r = int( (row['min'] + row['max'])//4 )
 
+        img = self.specs['kaggle'][row.spectrogram_id]
+        img = eeg_fill_na(img)
+        img = standardize_img(img)
+
+        x_tmp = np.zeros((128, 256, 4), dtype='float32')
         for k in range(4):
-            # EXTRACT 300 ROWS OF SPECTROGRAM(4種類抜いてくる)
-            img = self.specs['kaggle'][row.spectrogram_id][r:r+300,k*100:(k+1)*100].T
+            img_t = img[r:r+300,k*100:(k+1)*100].T
+            x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
-            # LOG TRANSFORM SPECTROGRAM
-            img = np.clip(img,np.exp(-4),np.exp(8))
-            img = np.log(img)
+        if flip:
+            x_tmp = x_tmp[:,::-1,:]
+        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-            # STANDARDIZE PER IMAGE
-            ep = 1e-6
-            m = np.nanmean(img.flatten())
-            s = np.nanstd(img.flatten())
-            img = (img-m)/(s+ep)
-            img = np.nan_to_num(img, nan=0.0)
+        # # v11
+        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
+        # img = standardize_img(img)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-            # CROP TO 256 TIME STEPS
-            X[14:-14,:,k] = img[:,22:-22] / 2.0
+        # (64, 512, 4)型
+        img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # Chris
-        img = self.specs['chris'][row.eeg_id] # (128, 256, 4)
-        X[:,:,4:8] = img
+        # # (64, 512, 4)型
+        img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4))
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # v2
-        img = self.specs['v2'][row.eeg_id] # (128, 256, 4)
-        X[:,:,8:12] = img
+        if flip:
+            x2 = x2[::-1,:,:]
+            x3 = x3[::-1,:,:]
 
-        # cqt
-        img = self.specs['cqt'][row.eeg_id] # (128, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        X[:,:,12:16] = img
+        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
 
-        # v5
-        img = self.specs['v5'][row.eeg_id] # (64, 256, 4)
-        img = np.clip(img,np.exp(-4),np.exp(8))
-        img = np.log(img)
-        ep = 1e-6
-        m = np.nanmean(img.flatten())
-        s = np.nanstd(img.flatten())
-        img = (img-m)/(s+ep)
-        img = np.nan_to_num(img, nan=0.0)
-        img = np.vstack((img[:, :, :2], img[:, :, 2:])) # (64, 256, 4) -> (128, 256, 2)に変換
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 2) -> (128, 256, 4)に変換
-        X[:,:,16:18] = img
-
-        
-        if self.mode!='test':
-            y = row.loc[TARGETS]
-
-        return X,y # (128,256,16), (6)
+        return X, y # (), (6)
+        # return x1, y
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -170,41 +195,55 @@ class HMSDataset(Dataset):
         return transforms(image=img)['image']
 
 
-class CustomInputTransform(nn.Module):
-    def __init__(self, ):
-        super(CustomInputTransform, self).__init__()
+class GeM(nn.Module):
+    def __init__(self, p=3, eps=1e-6, device='cuda:0'):
+        super(GeM, self).__init__()
+        # pを固定値として定義
+        self.p = torch.ones(1, device=device) * p
+        self.eps = eps
 
-    def forward(self, x): 
-        x1 = torch.cat([x[:, :, :, i:i+1] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x2 = torch.cat([x[:, :, :, i+4:i+5] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x3 = torch.cat([x[:, :, :, i+8:i+9] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x4 = torch.cat([x[:, :, :, i+12:i+13] for i in range(4)], dim=1) # (batch_size, 512, 256, 1)
-        x5 = torch.cat([x[:, :, :, i+16:i+17] for i in range(2)], dim=1) # (batch_size, 256, 256, 1)
+    def forward(self, x):
+        return F.avg_pool2d(
+            x.clamp(min=self.eps).pow(self.p), 
+            (x.size(-2), x.size(-1))).pow(1. / self.p)
 
-        x_t = torch.cat([x1, x2, x3], dim=2) # (batch_size, 512, 768, 1)
-        x_t2 = torch.cat([x4, x5], dim=1) #(batch_size, 768, 256, 1)
-        x_t2 = x_t2.permute(0, 2, 1, 3) # (batch_size, 256, 768, 1)
+    def __repr__(self):
+        return f'GeM(p={self.p.item()}, eps={self.eps})'
 
-        x = torch.cat([x_t, x_t2], dim=1) # (batch_size, 768, 768, 1)
-        x = x.repeat(1, 1, 1, 3) 
-        x = x.permute(0, 3, 1, 2)
-        return x
 
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        self.input_transform = CustomInputTransform()
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-
-        # EfficientNetで必要
-        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
         in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
         self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
-        self.base_model.classifier = self.fc
+
+        # conv2d
+        # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
+        # self.relu = nn.ReLU()
+
+        # GeM Pooling
+        self.gem = GeM(p=3, eps=1e-6)
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
+
+        # Baseline
+        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
-        x = self.input_transform(x)
+        x = x.repeat(1, 1, 1, 3) 
+        x = x.permute(0, 3, 1, 2)
+
+        # conv2d
+        # x = self.conv2d(x)
+        # x = self.relu(x)
+
         x = self.base_model(x)
+
+        # Gem Pooling
+        x = self.gem(x) # (batch_size, 1280, 1, 1)
+        x = x.view(x.size(0), -1) # (batch_size, 1280)
+        x = self.fc(x)
+
         return x
     
 
@@ -214,6 +253,16 @@ def calc_cv_score(oof,true):
     oof = pd.DataFrame(np.concatenate(oof).copy())
     oof['id'] = np.arange(len(oof))
     true = pd.DataFrame(np.concatenate(true).copy())
+    true['id'] = np.arange(len(true))
+    cv = score(solution=true, submission=oof, row_id_column_name='id')
+    return cv
+
+def get_cv_score(oof,true):
+    from kaggle_kl_div import score
+
+    oof = pd.DataFrame(oof)
+    oof['id'] = np.arange(len(oof))
+    true = pd.DataFrame(true)
     true['id'] = np.arange(len(true))
     cv = score(solution=true, submission=oof, row_id_column_name='id')
     return cv
@@ -248,9 +297,7 @@ def train_model(model, train_loader, valid_loader, optimizer, scheduler, criteri
             valid_loss.append(loss.item())
             oof.append(softmax(outputs,dim=1).to('cpu').numpy())
 
-    # モデルの重みを保存
-    cv=calc_cv_score(oof,true)
-    return model, oof, np.mean(train_loss),np.mean(valid_loss),cv
+    return model, oof, np.mean(train_loss),np.mean(valid_loss)
 
 
 def inference_function(test_loader, model, device):
@@ -324,54 +371,112 @@ class Runner():
     def load_dataset(self, ):
         
         df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
-        train = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-            {'spectrogram_id':'first','spectrogram_label_offset_seconds':'min'})
-        train.columns = ['spectrogram_id','min']
+        df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
 
-        tmp = df.groupby('eeg_id')[['spectrogram_id','spectrogram_label_offset_seconds']].agg(
-            {'spectrogram_label_offset_seconds':'max'})
-        train['max'] = tmp
+        def get_train_df(df_tmp):
+            train = df_tmp.groupby('eeg_id').agg(
+                spectrogram_id= ('spectrogram_id','first'),
+                min = ('spectrogram_label_offset_seconds','min'),
+                max = ('spectrogram_label_offset_seconds','max'),
+                patient_id = ('patient_id','first'),
+                total_evaluators = ('total_evaluators','mean'),
+                target = ('expert_consensus','first'),
+                seizure_vote = ('seizure_vote','sum'),
+                lpd_vote = ('lpd_vote','sum'),
+                gpd_vote = ('gpd_vote','sum'),
+                lrda_vote = ('lrda_vote','sum'),
+                grda_vote = ('grda_vote','sum'),
+                other_vote = ('other_vote','sum'),
+            )
+            y_data = train[TARGETS].values
+            y_data = y_data / y_data.sum(axis=1,keepdims=True)
+            train[TARGETS] = y_data
+            return train
 
-        tmp = df.groupby('eeg_id')[['patient_id']].agg('first')
-        train['patient_id'] = tmp
+        if RCFG.LABELS_V2:
+            logger.info('Create labels considering 2nd stage learning.')
+            eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
+            eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
+            eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
 
-        tmp = df.groupby('eeg_id')[TARGETS].agg('sum')
-        for t in TARGETS:
-            train[t] = tmp[t].values
+            # low, highについてはそれぞれ集計
+            df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
+            train_not_both = get_train_df(df_not_both)
 
-        y_data = train[TARGETS].values
-        y_data = y_data / y_data.sum(axis=1,keepdims=True)
-        train[TARGETS] = y_data
+            # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
+            df_both = df[df['eeg_id'].isin(eeg_both)].copy()
+            df_both = df_both[df_both['total_evaluators']>=10]
+            train_both = get_train_df(df_both)
 
-        tmp = df.groupby('eeg_id')[['expert_consensus']].agg('first')
-        train['target'] = tmp
+            train = pd.concat([train_not_both, train_both])
+
+        else:
+            train = get_train_df(df)
 
         if RCFG.DEBUG:
             train = train.iloc[:RCFG.DEBUG_SIZE]
 
-        self.train = train.reset_index()
+        train = train.reset_index()
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
         # Create Fold
-        sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
-        self.train["fold"] = -1
-        for fold_id, (_, val_idx) in enumerate(
-            sgkf.split(self.train, y=self.train["target"], groups=self.train["patient_id"])
-        ):
-            self.train.loc[val_idx, "fold"] = fold_id
+        train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
 
-        # READ ALL SPECTROGRAMS
+        if RCFG.USE_ALL_LOW_QUALITY:
+            logger.info('Use all low quality data.')
+            train_2nd = train[train['stage']==2].copy().reset_index()
+            train_2nd["fold"] = -1
+            sgkf = StratifiedGroupKFold(n_splits=5)
+            for fold_id, (_, val_idx) in enumerate(
+                sgkf.split(train_2nd, y=train_2nd['target'], groups=train_2nd["patient_id"])
+            ):
+                train_2nd.loc[val_idx, "fold"] = fold_id
+            df_patient_id_fold = train_2nd[['patient_id', 'fold']].drop_duplicates()
+            train = train.merge(df_patient_id_fold, on='patient_id', how='left')
+            train.loc[train['fold'].isnull(), 'fold'] = -1
+        else:
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
+            train["fold"] = -1
+            for fold_id, (_, val_idx) in enumerate(
+                sgkf.split(train, y=train["target"], groups=train["patient_id"])
+            ):
+                train.loc[val_idx, "fold"] = fold_id
+
+        rng = np.random.default_rng()
+        train['random_value'] = rng.random(len(train))
+        train = train.drop('random_value', axis=1)
+
+        if RCFG.ADD_MIXUP_DATA:
+            logger.info('Add external data.')
+            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
+            mixup_data = mixup_data[train.columns]
+            mixup_data['target'] = 'Ext'
+            if RCFG.DEBUG:
+                mixup_data = mixup_data.iloc[:100]
+
+            train = pd.concat([train, mixup_data]).reset_index()
+            logger.info(f'Train shape after adding external data: {train.shape}')
+
+        if RCFG.PSEUDO_LABELLING:
+            logger.info('Load pseudo labelling data.')
+            pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
+            targets_oof = [f"{c}_oof" for c in TARGETS]
+            pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
+            train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
+
+        self.train = train
+
+    def load_spectrograms(self, ):
         self.all_spectrograms = {}
-        logger.info('Loading spectrograms specs.py')
-        self.all_spectrograms['kaggle'] = np.load(ROOT_PATH  + '/input/hms-hbac-data/specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec.py')
-        self.all_spectrograms['chris'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_v2.py')
-        self.all_spectrograms['v2'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_v2.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cwt_v5.py')
-        self.all_spectrograms['v5'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cwt_v5.npy',allow_pickle=True).item()
-        logger.info('Loading spectrograms eeg_spec_cqt.py')
-        self.all_spectrograms['cqt'] = np.load(ROOT_PATH + '/input/hms-hbac-data/eeg_specs_cqt.npy',allow_pickle=True).item()
+        for name in RCFG.USE_SPECTROGRAMS:
+            logger.info(f'Loading spectrograms eeg_spec_{name}.py')
+            self.all_spectrograms[name] = np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_{name}.npy',allow_pickle=True).item()
+
+        if RCFG.ADD_MIXUP_DATA:
+            for name in RCFG.USE_SPECTROGRAMS:
+                if name == 'kaggle': continue
+                logger.info(f'Loading mixup spectrograms eeg_spec_{name}.py')
+                self.all_spectrograms[name].update(np.load(ROOT_PATH + f'/input/hms-hbac-data/eeg_specs_mixup_v2_{name}.npy',allow_pickle=True).item())
 
     def run_train(self, ):
 
@@ -379,23 +484,32 @@ class Runner():
         self.train[TARGETS_OOF] = 0
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
+        train_2nd = self.train[self.train['stage']==2]
+        
         for fold_id in fold_lists:
 
             logger.info(f'###################################### Fold {fold_id+1}')
             train_index = self.train[self.train.fold != fold_id].index
             valid_index = self.train[self.train.fold == fold_id].index
             
+            valid_df = self.train[self.train.fold == fold_id].reset_index().copy()
+            true = valid_df[TARGETS].values
+            valid_2nd_index = valid_df[valid_df['stage']==2].index
+            train_2nd_index = train_2nd[train_2nd.fold != fold_id].index
+            
             # データローダーの作成
             train_dataset = HMSDataset(
                 self.train.iloc[train_index],
-                self.all_spectrograms
+                self.all_spectrograms,
+                smoothing = CFG.SMOOTHING
             )
+            logger.info(f'Length of train_dataset: {len(train_dataset)}')
             train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
                 self.all_spectrograms,
-                augment=False
+                mode='valid'
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
@@ -403,7 +517,10 @@ class Runner():
             model = HMSModel().to(torch.device(RCFG.DEVICE))
             optimizer = optim.AdamW(model.parameters(),lr=0.001)
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
-            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
+            # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
+            # 学習率スケジュールを定義
+            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-3, 3: 2e-4, 4: 1e-4}
+            scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
             # トレーニングループ
@@ -412,7 +529,7 @@ class Runner():
             best_epoch = 0
             best_oof = None
             for epoch in range(1, CFG.EPOCHS+1):
-                model, oof, tr_loss, val_loss, cv = train_model(
+                model, oof, tr_loss, val_loss = train_model(
                     model, 
                     train_loader, 
                     valid_loader,
@@ -420,21 +537,69 @@ class Runner():
                     scheduler,
                     criterion
                 )
-                # エポックごとのログを出力
-                logger.info(f'Epoch {epoch}, Train Loss: {tr_loss}, Valid Loss: {val_loss}')
+                
+                oof = np.concatenate(oof).copy()
+                valid_2nd_loss = get_cv_score(oof[valid_2nd_index], true[valid_2nd_index])
 
-                if val_loss < best_valid_loss:
-                    best_oof = np.concatenate(oof).copy()
+                # エポックごとのログを出力
+                logger.info(f'Epoch {epoch}, Train Loss: {np.round(tr_loss, 6)}, Valid Loss: {np.round(val_loss, 6)}, Valid 2nd Loss: {np.round(valid_2nd_loss, 6)}')
+
+                if not CFG.SAVE_BEST or val_loss < best_valid_loss:
+                    best_oof = oof
                     best_epoch = epoch
-                    best_cv = cv
+                    best_cv = valid_2nd_loss
                     best_valid_loss = val_loss
-                    self.info['fold_cv'][fold_id] = cv
+                    self.info['fold_cv'][fold_id] = valid_2nd_loss
                     if not RCFG.DEBUG:
                         torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
-                if CFG.EARLY_STOPPING > 0 and epoch - best_epoch >= CFG.EARLY_STOPPING:
-                    logger.info(f'Early stopping!')
-                    break
+
+            if CFG.TWO_STAGE_EPOCHS > 0:
+                
+                logger.info(f'############ Second Stage')
+                # データローダーの作成
+                train_dataset = HMSDataset(
+                    train_2nd.loc[train_2nd_index],
+                    self.all_spectrograms
+                )
+                logger.info(f'Length of train_dataset: {len(train_dataset)}')
+                train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
+
+                optimizer = optim.AdamW(model.parameters(),lr=1e-4)
+                lr_schedule = {0: 2e-4, 1: 2e-4, 2: 1e-4, 3: 1e-5, 4: 1e-5}
+                scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
+                # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
+                criterion = nn.KLDivLoss(reduction='batchmean') 
+
+                # トレーニングループ
+                best_valid_loss = np.inf
+                best_cv = np.inf
+                best_epoch = 0
+                best_oof = None
+                for epoch in range(1, CFG.TWO_STAGE_EPOCHS+1):
+                    model, oof, tr_loss, val_loss = train_model(
+                        model, 
+                        train_loader, 
+                        valid_loader,
+                        optimizer,
+                        scheduler,
+                        criterion
+                    )
+
+                    oof = np.concatenate(oof).copy()
+                    valid_2nd_loss = get_cv_score(oof[valid_2nd_index], true[valid_2nd_index])
+
+                    # エポックごとのログを出力
+                    logger.info(f'Epoch {epoch}, Train Loss: {np.round(tr_loss, 6)}, Valid Loss: {np.round(val_loss, 6)}, Valid 2nd Loss: {np.round(valid_2nd_loss, 6)}')
+
+                    if not CFG.SAVE_BEST or val_loss < best_valid_loss:
+                        best_oof = oof
+                        best_epoch = epoch
+                        best_cv = valid_2nd_loss
+                        best_valid_loss = val_loss
+                        self.info['fold_cv'][fold_id] = valid_2nd_loss
+                        if not RCFG.DEBUG:
+                            torch.save(model.state_dict(), OUTPUT_PATH + f'/model/{RCFG.RUN_NAME}_fold{fold_id}_{CFG.MODEL_NAME}.pickle')
 
             self.train.loc[valid_index, TARGETS_OOF] = best_oof
             self.train.to_csv(OUTPUT_PATH + f'/data/{RCFG.RUN_NAME}_train_oof.csv', index=False)
@@ -476,18 +641,56 @@ class Runner():
         paths_eegs = glob(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/test_eegs/*.parquet')
         logger.info(f'There are {len(paths_eegs)} EEG spectrograms')
         
-        all_infer_spectrograms['kaggle'] = {}
+        all_infer_spectrograms = {}
+        for name in RCFG.USE_SPECTROGRAMS:
+            all_infer_spectrograms[name] = {}
+
         for file_path in tqdm(paths_spectrograms):
             aux = pd.read_parquet(file_path)
             name = int(file_path.split("/")[-1].split('.')[0])
             all_infer_spectrograms['kaggle'] [name] = aux.iloc[:,1:].values
             del aux
         
-        for file_path in tqdm(paths_eegs):
-            eeg_id = file_path.split("/")[-1].split(".")[0]
-            eeg_spectrogram = spectrogram_from_eeg(file_path)
-            all_infer_spectrograms['v2'][int(eeg_id)] = eeg_spectrogram
-            all_infer_spectrograms['v5'][int(eeg_id)] = spectrogram_from_eeg_cwt(file_path)
+        gc.collect()
+        TMP = Path(ROOT_PATH) / "tmp"
+        if RCFG.CREATE_SPECS:
+            TMP.mkdir(exist_ok=True)
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_v2.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cwt_v5.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cwt_v11.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+            
+            converted_specs = {}            
+            for file_path in tqdm(paths_eegs):
+                eeg_id = file_path.split("/")[-1].split(".")[0]
+                converted_specs[int(eeg_id)] = spectrogram_from_eeg(file_path)
+            np.save(TMP / f'eeg_specs_cqt.npy', converted_specs)
+            del converted_specs
+            gc.collect()
+        
+        for name in RCFG.USE_SPECTROGRAMS:
+            if name == 'kaggle': continue
+            all_infer_spectrograms[name] = np.load(TMP / f'eeg_specs_{name}.npy', allow_pickle=True).item()
 
         test_dataset = HMSDataset(
             data = test_df, 
@@ -512,6 +715,7 @@ class Runner():
             model.to(torch.device(RCFG.DEVICE))
             prediction_dict = inference_function(test_loader, model, torch.device(RCFG.DEVICE))
             predictions.append(prediction_dict["predictions"])
+            del model
             torch.cuda.empty_cache()
             gc.collect()
             
@@ -521,12 +725,11 @@ class Runner():
         self.sub = pd.DataFrame({'eeg_id': test_df.eeg_id.values})
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
-
-        return all_infer_spectrograms
         
 
     def main(self):
         self.load_dataset()
+        self.load_spectrograms()
         self.run_train()
 
         if RCFG.SAVE_TO_SHEET:
