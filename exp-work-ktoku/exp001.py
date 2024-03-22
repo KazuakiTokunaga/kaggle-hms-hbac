@@ -184,7 +184,6 @@ class HMSDataset(Dataset):
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         if flip:
-            x1 = x1[::-1,:,:]
             x2 = x2[::-1,:,:]
             x3 = x3[::-1,:,:]
 
