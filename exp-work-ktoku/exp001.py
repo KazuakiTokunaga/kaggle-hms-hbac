@@ -162,7 +162,7 @@ class HMSDataset(Dataset):
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
         if flip:
-            x_tmp[:,::-1,:] = x_tmp[:,::-1,:]
+            x_tmp = x_tmp[:,::-1,:]
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v11
