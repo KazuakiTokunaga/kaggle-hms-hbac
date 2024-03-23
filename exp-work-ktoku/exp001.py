@@ -12,16 +12,18 @@ import random
 import warnings
 import albumentations as A
 import pathlib
+import torch.nn.functional as F
 from tqdm import tqdm
 from glob import glob
 from pathlib import Path
+from scipy.ndimage import zoom
 from torch import optim
 from torch.optim.lr_scheduler import OneCycleLR
 from sklearn.model_selection import KFold, GroupKFold, StratifiedGroupKFold
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import log_softmax, softmax
 from torch.nn.parameter import Parameter
-import torch.nn.functional as F
+
 
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
@@ -155,8 +157,17 @@ class HMSDataset(Dataset):
         for k in range(4):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
-
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+
+        x_tmp = np.zeros((64, 256, 4), dtype='float32')
+        for k in range(4):
+            img_t = img[r:r+300,k*100:(k+1)*100].T
+            img_t = zoom(img_t, (64/img_t.shape[0], 256/img_t.shape[1]))
+            x_tmp[:,:,k] = img_t
+        logger.info(f'x_tmp shape: {x_tmp.shape}')
+        x_tmp = np.concatenate([x_tmp[:, :, 2*i:2*i+2] for i in range(2)], axis=1) # (64, 512, 2)
+        logger.info(f'x_tmp shape: {x_tmp.shape}')
+        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(2)], axis=0) # (128, 512, 1)
 
         # # v11
         # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
@@ -168,21 +179,22 @@ class HMSDataset(Dataset):
 
         # (64, 512, 4)型
         img = self.specs['cwt_cmor_20sec_v79'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
         img = self.specs['cwt_cmor_10sec_v67'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
         img = self.specs['cwt_cmor_20sec_last_v79'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
 
         X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        logger.info(f'X shape: {X.shape}')
 
         return X, y # (), (6)
         # return x1, y
