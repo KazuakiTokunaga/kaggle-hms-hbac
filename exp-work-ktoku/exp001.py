@@ -45,7 +45,7 @@ class RCFG:
     PSEUDO_LABELLING = False
     LABELS_V2 = True
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_v67', 'cwt_cmor_10sec_v67']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v79', 'cwt_cmor_10sec_v67', 'cwt_cmor_20sec_last_v79']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -54,13 +54,13 @@ class CFG:
     """モデルに関連する設定"""
     MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
-    EPOCHS = 4
+    EPOCHS = 3
     N_SPLITS = 5
     BATCH_SIZE = 32
-    AUGMENT = True
+    AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
-    TWO_STAGE_EPOCHS = 4 # 0のときは1stのみ
+    TWO_STAGE_EPOCHS = 3 # 0のときは1stのみ
     SAVE_BEST = False # Falseのときは最後のモデルを保存
     SMOOTHING = False
 
@@ -76,6 +76,7 @@ EFFICIENTNET_SIZE = {
     "efficientnet_b6": 2304, 
     "efficientnet_b7": 2560
 }
+
 
 def eeg_fill_na(x):
     m = np.nanmean(x)
@@ -123,7 +124,8 @@ class HMSDataset(Dataset):
     def __getitem__(self, idx):
         indexes = self.indexes[idx]
         X, y = self.__data_generation(indexes)
-
+        if self.augment:
+            X = self._augment_batch(X)
         if self.mode != 'test':
             return torch.tensor(X, dtype=torch.float32), torch.tensor(y, dtype=torch.float32)
         else:
@@ -132,17 +134,13 @@ class HMSDataset(Dataset):
     def __data_generation(self, indexes):
         'Generates data containing batch_size samples'
 
-        flip = False
-        if self.augment and self.mode == 'train':
-            rand = np.random.uniform(0, 1)
-            if rand < 0.3:
-                flip = True
-
         row = self.data.iloc[indexes]
         y = np.zeros((6),dtype='float32')
-
+        
         if self.mode!='test':
             y = row.loc[TARGETS]
+            if self.smoothing:
+                y = self.__apply_label_smoothing(y)
 
         if self.mode=='test':
             r = 0
@@ -158,8 +156,6 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
-        if flip:
-            x_tmp = x_tmp[:,::-1,:]
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v11
@@ -171,7 +167,7 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_v67'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cmor_20sec_v79'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -180,21 +176,29 @@ class HMSDataset(Dataset):
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        if flip:
-            x2 = x2[::-1,:,:]
-            x3 = x3[::-1,:,:]
+        # # (64, 512, 4)型
+        img = self.specs['cwt_cmor_20sec_last_v79'][row.eeg_id] # (64, 512, 4))
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        X = np.concatenate([x1, x2, x3], axis=1) # (512, 768, 1)
+
+        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
 
         return X, y # (), (6)
         # return x1, y
 
-    # def _augment_batch(self, img):
-    #     transforms = A.Compose([
-    #         A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0, rotate_limit=0, p=0.3, border_mode=0), # 時間軸方向のシフト
-    #         A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
-    #     ])
-    #     return transforms(image=img)['image']
+    def _augment_batch(self, img):
+        transforms = A.Compose([
+            A.ShiftScaleRotate(shift_limit=0.1, scale_limit=0, rotate_limit=0, p=0.3, border_mode=0), # 時間軸方向のシフト
+            A.GaussNoise(var_limit=(10, 50), p=0.3) # ガウス雑音
+        ])
+        return transforms(image=img)['image']
+    
+    def __apply_label_smoothing(self, labels, smoothing=0.1):
+
+        labels = labels * (1 - smoothing) + (smoothing / labels.shape[0])
+        labels /= labels.sum()  # 再正規化
+        return labels
 
 
 class GeM(nn.Module):
@@ -224,12 +228,12 @@ class HMSModel(nn.Module):
         # self.relu = nn.ReLU()
 
         # GeM Pooling
-        self.gem = GeM(p=3, eps=1e-6)
-        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
+        # self.gem = GeM(p=3, eps=1e-6)
+        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=0, global_pool='', in_chans=CFG.IN_CHANS)
 
         # Baseline
-        # self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-        # self.base_model.classifier = self.fc
+        self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
@@ -242,9 +246,9 @@ class HMSModel(nn.Module):
         x = self.base_model(x)
 
         # Gem Pooling
-        x = self.gem(x) # (batch_size, 1280, 1, 1)
-        x = x.view(x.size(0), -1) # (batch_size, 1280)
-        x = self.fc(x)
+        # x = self.gem(x) # (batch_size, 1280, 1, 1)
+        # x = x.view(x.size(0), -1) # (batch_size, 1280)
+        # x = self.fc(x)
 
         return x
     
@@ -510,8 +514,7 @@ class Runner():
 
             valid_dataset = HMSDataset(
                 self.train.iloc[valid_index],
-                self.all_spectrograms,
-                mode='valid'
+                self.all_spectrograms
             )
             valid_loader = DataLoader(valid_dataset, batch_size=CFG.BATCH_SIZE, shuffle=False, num_workers=2,pin_memory=True)
 
@@ -521,7 +524,7 @@ class Runner():
             # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=CFG.EPOCHS, eta_min=1e-6)
             # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 5], gamma=0.1)
             # 学習率スケジュールを定義
-            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 5e-4, 3: 2e-4, 4: 1e-4}
+            lr_schedule = {0: 1e-3, 1: 1e-3, 2: 1e-4, 3: 1e-4}
             scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
             criterion = nn.KLDivLoss(reduction='batchmean')  # 適切な損失関数を選択
 
@@ -567,8 +570,8 @@ class Runner():
                 logger.info(f'Length of train_dataset: {len(train_dataset)}')
                 train_loader = DataLoader(train_dataset, batch_size=CFG.BATCH_SIZE, shuffle=True, num_workers=2,pin_memory=True)
 
-                optimizer = optim.AdamW(model.parameters(),lr=2e-4)
-                lr_schedule = {0: 2e-4, 1: 1e-4, 2: 1e-4, 3: 1e-5, 4: 1e-5}
+                optimizer = optim.AdamW(model.parameters(),lr=1e-4)
+                lr_schedule = {0: 1e-4, 1: 1e-5, 2: 1e-5, 3: 1e-6}
                 scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda epoch: lr_schedule[epoch] / lr_schedule[0])
                 # scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[2, 4], gamma=0.1)
                 criterion = nn.KLDivLoss(reduction='batchmean') 
