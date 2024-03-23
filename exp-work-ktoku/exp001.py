@@ -158,6 +158,7 @@ class HMSDataset(Dataset):
         for k in range(4):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
+
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # # v11
@@ -170,21 +171,21 @@ class HMSDataset(Dataset):
 
         # (64, 512, 4)型
         img = self.specs['cwt_cmor_20sec_v81'][row.eeg_id] # (64, 512, 4)
-        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
         img = self.specs['cwt_cmor_10sec_v81'][row.eeg_id] # (64, 512, 4))
-        x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # # (64, 512, 4)型
         img = self.specs['cwt_cmor_20sec_last_v81'][row.eeg_id] # (64, 512, 4))
-        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x4 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
 
-        X = np.concatenate([x1, x2, x3, x4], axis=0) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
 
         return X, y # (), (6)
         # return x1, y
