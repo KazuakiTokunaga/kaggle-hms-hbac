@@ -193,7 +193,7 @@ class HMSDataset(Dataset):
         # x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
 
-        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3, x4], axis=0) # (512, 768, 1)
         logger.info(f'X shape: {X.shape}')
 
         return X, y # (), (6)
