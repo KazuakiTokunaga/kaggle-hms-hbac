@@ -4,7 +4,8 @@ import sys
 import torch
 import torch.nn as nn
 import os, gc
-import pandas as pd, numpy as np
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import timm
 import datetime
@@ -164,9 +165,7 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             img_t = zoom(img_t, (64/img_t.shape[0], 256/img_t.shape[1]))
             x_tmp[:,:,k] = img_t
-        logger.info(f'x_tmp shape: {x_tmp.shape}')
         x_tmp = np.concatenate([x_tmp[:, :, 2*i:2*i+2] for i in range(2)], axis=1) # (64, 512, 2)
-        logger.info(f'x_tmp shape: {x_tmp.shape}')
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(2)], axis=0) # (128, 512, 1)
 
         # # v11
@@ -194,7 +193,6 @@ class HMSDataset(Dataset):
 
 
         X = np.concatenate([x1, x2, x3, x4], axis=0) # (512, 768, 1)
-        logger.info(f'X shape: {X.shape}')
 
         return X, y # (), (6)
         # return x1, y
