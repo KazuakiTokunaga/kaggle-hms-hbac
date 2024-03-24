@@ -483,7 +483,7 @@ class Runner():
             train = get_train_df(df).reset_index()
 
         if RCFG.DEBUG:
-            train = train.iloc[:RCFG.DEBUG_SIZE]
+            train = train.sample(RCFG.DEBUG_SIZE).reset_index(drop=True)
 
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
 
