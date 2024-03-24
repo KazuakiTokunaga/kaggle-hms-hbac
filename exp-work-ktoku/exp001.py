@@ -47,8 +47,8 @@ class RCFG:
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
-    LABELS_V2 = False
-    LABELS_V3 = True
+    LABELS_V2 = True
+    LABELS_V3 = False
     USE_SPECTROGRAMS = ['kaggle']
     # USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v84', 'cwt_cmor_10sec_v84', 'cwt_cmor_20sec_last_v84']
     CREATE_SPECS = True
