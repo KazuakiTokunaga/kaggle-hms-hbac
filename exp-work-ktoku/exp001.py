@@ -178,17 +178,17 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_v84'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cmor_20sec_v95'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_10sec_v84'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_10sec_v95'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_last_v84'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_20sec_last_v95'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
