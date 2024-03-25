@@ -49,8 +49,8 @@ class RCFG:
     PSEUDO_LABELLING = False
     LABELS_V2 = False
     LABELS_V3 = True
-    # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v84', 'cwt_cmor_10sec_v84', 'cwt_cmor_20sec_last_v84']
+    USE_SPECTROGRAMS = ['kaggle']
+    # USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v95', 'cwt_cmor_10sec_v95', 'cwt_cmor_20sec_last_v95']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -177,25 +177,25 @@ class HMSDataset(Dataset):
         # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_v84'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_20sec_v84'][row.eeg_id] # (64, 512, 4)
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_cmor_10sec_v84'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_10sec_v84'][row.eeg_id] # (64, 512, 4))
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_last_v84'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_20sec_last_v84'][row.eeg_id] # (64, 512, 4))
+        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        # x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        # X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
 
-        return X, y # (), (6)
-        # return x1, y
+        # return X, y # (), (6)
+        return x1, y
 
     def _augment_batch(self, img):
         transforms = A.Compose([
@@ -386,7 +386,8 @@ class Runner():
     
     def load_dataset(self, ):
         
-        df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
+        df = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/train.csv')
+        TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
         df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
 
         def get_train_df(df_tmp):
@@ -409,77 +410,61 @@ class Runner():
             y_data = train[TARGETS].values
             y_data = y_data / y_data.sum(axis=1,keepdims=True)
             train[TARGETS] = y_data
-            train['eeg_id_original'] = train['eeg_id'].copy()
-
+            
+            train['spec_offset_second'] = (train['max'] + train['min']) // 2 
+            train['eeg_offset_second'] = (train['eeg_max'] + train['eeg_min']) // 2
             return train
-        
+
         def get_train_df_high(df_tmp):
-    
-            train = df_tmp.groupby(['eeg_id']+TARGETS).agg(
+
+            train = df_tmp.groupby('eeg_id').agg(
                 spectrogram_id= ('spectrogram_id','first'),
-                min = ('spectrogram_label_offset_seconds','min'),
+                min = ('spectrogram_label_offset_seconds','first'),
                 max = ('spectrogram_label_offset_seconds','max'),
-                eeg_min = ('eeg_label_offset_seconds','min'),
+                eeg_min = ('eeg_label_offset_seconds','first'),
                 eeg_max = ('eeg_label_offset_seconds','max'),
                 patient_id = ('patient_id','first'),
-                total_evaluators = ('total_evaluators','mean'),
-                target = ('expert_consensus','first')
+                total_evaluators = ('total_evaluators','first'),
+                target = ('expert_consensus','first'),
+                seizure_vote = ('seizure_vote','first'),
+                lpd_vote = ('lpd_vote','first'),
+                gpd_vote = ('gpd_vote','first'),
+                lrda_vote = ('lrda_vote','first'),
+                grda_vote = ('grda_vote','first'),
+                other_vote = ('other_vote','first'),
             ).reset_index()
 
-            train['eeg_id_rank'] = train.groupby('eeg_id')['eeg_id'].cumcount()+1
-            train['eeg_id_original'] = train['eeg_id'].copy()
-            train['eeg_id'] = (train['eeg_id_original'] + train['eeg_id_rank']).apply(lambda x: string_to_11_digit_hash(str(x)))
-            
             y_data = train[TARGETS].values
             y_data = y_data / y_data.sum(axis=1,keepdims=True)
             train[TARGETS] = y_data
-            
-            return train.drop('eeg_id_rank', axis=1)
 
-        if RCFG.LABELS_V2:
-            logger.info('Create labels considering 2nd stage learning.')
-            eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
-            eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
-            eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
+            train['spec_offset_second'] = train['min'] // 2
+            train['eeg_offset_second'] = train['eeg_min'].copy()
+            return train
 
-            # low, highについてはそれぞれ集計
-            df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
-            train_not_both = get_train_df(df_not_both)
+        print('Create labels considering 2nd stage learning.')
+        eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
+        eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
+        eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
 
-            # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
-            df_both = df[df['eeg_id'].isin(eeg_both)].copy()
-            df_both = df_both[df_both['total_evaluators']>=10]
-            train_both = get_train_df(df_both)
+        # low, highについてはそれぞれ集計
+        df_low = df[(df['eeg_id'].isin(eeg_low))&(~df['eeg_id'].isin(eeg_both))].copy()
+        train_low = get_train_df(df_low)
 
-            train = pd.concat([train_not_both, train_both]).reset_index(drop=True)
+        df_high = df[(df['eeg_id'].isin(eeg_high))&(~df['eeg_id'].isin(eeg_both))].copy()
+        train_high = get_train_df_high(df_high)
 
-        elif RCFG.LABELS_V3:
-            logger.info('Create labels considering 2nd stage learning.')
-            eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
-            eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
-            eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
+        # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
+        df_both = df[df['eeg_id'].isin(eeg_both)].copy()
+        df_both = df_both[df_both['total_evaluators']>=10]
+        train_both = get_train_df_high(df_both)
 
-            # low, highについてはそれぞれ集計
-            df_low = df[(df['eeg_id'].isin(eeg_low))&(~df['eeg_id'].isin(eeg_both))].copy()
-            train_low = get_train_df(df_low)
+        # カラムの順番を揃える
+        columns = train_low.columns
+        train_high = train_high[columns]
+        train_both = train_both[columns]
 
-            df_high = df[(df['eeg_id'].isin(eeg_high))&(~df['eeg_id'].isin(eeg_both))].copy()
-            train_high = get_train_df_high(df_high)
-
-            # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
-            df_both = df[df['eeg_id'].isin(eeg_both)].copy()
-            df_both = df_both[df_both['total_evaluators']>=10]
-            train_both = get_train_df_high(df_both)
-
-            # カラムの順番を揃える
-            columns = train_low.columns
-            train_high = train_high[columns]
-            train_both = train_both[columns]
-
-            train = pd.concat([train_low, train_high, train_both]).reset_index(drop=True)
-
-        else:
-            train = get_train_df(df).reset_index()
+        train = pd.concat([train_low, train_high, train_both]).reset_index(drop=True)
 
         if RCFG.DEBUG:
             train = train.sample(RCFG.DEBUG_SIZE).reset_index(drop=True)
