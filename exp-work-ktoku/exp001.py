@@ -50,7 +50,7 @@ class RCFG:
     LABELS_V2 = False
     LABELS_V3 = True
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v95', 'cwt_cmor_10sec_v95', 'cwt_cmor_20sec_last_v95']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v97', 'cwt_mexh_10sec_v97', 'cwt_mexh_20sec_last_v97']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -157,6 +157,7 @@ class HMSDataset(Dataset):
             r = 0
         else:
             r = int( row['spec_offset_second'] //2 )
+            # r = int( (row['min'] + row['max'])//4 )
 
         img = self.specs['kaggle'][row.spectrogram_id]
         img = eeg_fill_na(img)
@@ -178,17 +179,17 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_v95'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_mexh_20sec_v97'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_10sec_v95'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_mexh_10sec_v97'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_cmor_20sec_last_v95'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_mexh_20sec_last_v97'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
