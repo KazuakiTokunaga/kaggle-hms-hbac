@@ -386,8 +386,7 @@ class Runner():
     
     def load_dataset(self, ):
         
-        df = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/train.csv')
-        TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
+        df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
 
         def get_train_df(df_tmp):
