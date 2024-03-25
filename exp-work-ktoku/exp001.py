@@ -156,7 +156,7 @@ class HMSDataset(Dataset):
         if self.mode=='test':
             r = 0
         else:
-            r = int( (row['min'] + row['max'])//4 )
+            r = int( row['spec_offset_second'] //2 )
 
         img = self.specs['kaggle'][row.spectrogram_id]
         img = eeg_fill_na(img)
