@@ -50,7 +50,7 @@ class RCFG:
     LABELS_V2 = False
     LABELS_V3 = True
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v103', 'cwt_mexh_10sec_v100', 'cwt_cmor_20sec_last_v103']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v103', 'cwt_cmor_10sec_v103', 'cwt_cmor_20sec_last_v103']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -184,7 +184,7 @@ class HMSDataset(Dataset):
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v100'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_10sec_v103'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
