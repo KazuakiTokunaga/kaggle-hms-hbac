@@ -415,65 +415,28 @@ class Runner():
             train['eeg_offset_second'] = (train['eeg_max'] + train['eeg_min']) // 2
             return train
 
-        def get_train_df_high(df_tmp):
-
-            train = df_tmp.groupby('eeg_id').agg(
-                spectrogram_id= ('spectrogram_id','first'),
-                min = ('spectrogram_label_offset_seconds','first'),
-                max = ('spectrogram_label_offset_seconds','max'),
-                eeg_min = ('eeg_label_offset_seconds','first'),
-                eeg_max = ('eeg_label_offset_seconds','max'),
-                patient_id = ('patient_id','first'),
-                total_evaluators = ('total_evaluators','first'),
-                target = ('expert_consensus','first'),
-                seizure_vote = ('seizure_vote','first'),
-                lpd_vote = ('lpd_vote','first'),
-                gpd_vote = ('gpd_vote','first'),
-                lrda_vote = ('lrda_vote','first'),
-                grda_vote = ('grda_vote','first'),
-                other_vote = ('other_vote','first'),
-            ).reset_index()
-
-            y_data = train[TARGETS].values
-            y_data = y_data / y_data.sum(axis=1,keepdims=True)
-            train[TARGETS] = y_data
-
-            train['spec_offset_second'] = train['min'] // 2
-            train['eeg_offset_second'] = train['eeg_min'].copy()
-            return train
-
-        print('Create labels considering 2nd stage learning.')
         eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
         eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
         eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
 
         # low, highについてはそれぞれ集計
-        df_low = df[(df['eeg_id'].isin(eeg_low))&(~df['eeg_id'].isin(eeg_both))].copy()
-        train_low = get_train_df(df_low)
-
-        df_high = df[(df['eeg_id'].isin(eeg_high))&(~df['eeg_id'].isin(eeg_both))].copy()
-        train_high = get_train_df_high(df_high)
+        df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
+        train_not_both = get_train_df(df_not_both)
 
         # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
         df_both = df[df['eeg_id'].isin(eeg_both)].copy()
         df_both = df_both[df_both['total_evaluators']>=10]
-        train_both = get_train_df_high(df_both)
+        train_both = get_train_df(df_both)
 
-        # カラムの順番を揃える
-        columns = train_low.columns
-        train_high = train_high[columns]
-        train_both = train_both[columns]
-
-        train = pd.concat([train_low, train_high, train_both]).reset_index(drop=True)
+        train = pd.concat([train_not_both, train_both]).reset_index(drop=True)
 
         if RCFG.DEBUG:
             train = train.sample(RCFG.DEBUG_SIZE).reset_index(drop=True)
 
         logger.info(f'Train non-overlapp eeg_id shape: {train.shape}')
-
-        # Create Fold
         train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= CFG.TWO_STAGE_THRESHOLD else 1)
 
+        # Create Fold
         if RCFG.USE_ALL_LOW_QUALITY:
             logger.info('Use all low quality data.')
             train_2nd = train[train['stage']==2].copy().reset_index()

@@ -15,6 +15,56 @@ pl.Config.set_tbl_rows(4000)
 import hashlib
 
 ###########################
+# オリジナル版
+###########################
+
+df = pd.read_csv('/kaggle/input/hms-harmful-brain-activity-classification/train.csv')
+TARGETS = ["seizure_vote", "lpd_vote", "gpd_vote", "lrda_vote", "grda_vote", "other_vote"]
+df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
+
+def get_train_df(df_tmp):
+    train = df_tmp.groupby('eeg_id').agg(
+        spectrogram_id= ('spectrogram_id','first'),
+        min = ('spectrogram_label_offset_seconds','min'),
+        max = ('spectrogram_label_offset_seconds','max'),
+        eeg_min = ('eeg_label_offset_seconds','min'),
+        eeg_max = ('eeg_label_offset_seconds','max'),
+        patient_id = ('patient_id','first'),
+        total_evaluators = ('total_evaluators','mean'),
+        target = ('expert_consensus','first'),
+        seizure_vote = ('seizure_vote','sum'),
+        lpd_vote = ('lpd_vote','sum'),
+        gpd_vote = ('gpd_vote','sum'),
+        lrda_vote = ('lrda_vote','sum'),
+        grda_vote = ('grda_vote','sum'),
+        other_vote = ('other_vote','sum'),
+    ).reset_index()
+    y_data = train[TARGETS].values
+    y_data = y_data / y_data.sum(axis=1,keepdims=True)
+    train[TARGETS] = y_data
+    
+    train['spec_offset_second'] = (train['max'] + train['min']) // 2 
+    train['eeg_offset_second'] = (train['eeg_max'] + train['eeg_min']) // 2
+    return train
+
+eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
+eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
+eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
+
+# low, highについてはそれぞれ集計
+df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
+train_not_both = get_train_df(df_not_both)
+
+# 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
+df_both = df[df['eeg_id'].isin(eeg_both)].copy()
+df_both = df_both[df_both['total_evaluators']>=10]
+train_both = get_train_df(df_both)
+
+train = pd.concat([train_not_both, train_both]).reset_index(drop=True)
+train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= 10.0 else 1)
+
+
+###########################
 # ラベルごとに分ける場合 (2nd:7978個)
 ###########################
 
