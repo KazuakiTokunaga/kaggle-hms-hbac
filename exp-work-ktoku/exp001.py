@@ -45,7 +45,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = False
+    PSEUDO_LABELLING = True
     LABELS_V2 = False
     LABELS_V3 = True
     # USE_SPECTROGRAMS = ['kaggle']
