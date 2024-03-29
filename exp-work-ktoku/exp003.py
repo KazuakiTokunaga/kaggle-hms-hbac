@@ -30,7 +30,6 @@ from torch.nn.parameter import Parameter
 from utils import set_random_seed, create_random_id
 from utils import WriteSheet, Logger, class_vars_to_dict
 from eeg_to_spec import spectrogram_from_eeg
-from eeg_to_spec_cwt import spectrogram_from_eeg_cwt
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
