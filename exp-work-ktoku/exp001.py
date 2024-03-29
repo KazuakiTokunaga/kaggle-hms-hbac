@@ -469,22 +469,13 @@ class Runner():
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
-        if RCFG.ADD_MIXUP_DATA:
-            logger.info('Add external data.')
-            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
-            mixup_data = mixup_data[train.columns]
-            mixup_data['target'] = 'Ext'
-            if RCFG.DEBUG:
-                mixup_data = mixup_data.iloc[:100]
-
-            train = pd.concat([train, mixup_data]).reset_index()
-            logger.info(f'Train shape after adding external data: {train.shape}')
-
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
-            pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
             targets_oof = [f"{c}_oof" for c in TARGETS]
-            pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
+            # pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
+            # pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
+            train = pd.read_csv(ROOT_PATH + '/data/rqlblvo_train_oof.csv')
+            pseudo_labels = train.loc[train['total_evaluators']<10.0, targets_oof]
             train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
 
         self.train = train
