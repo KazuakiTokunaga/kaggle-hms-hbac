@@ -45,13 +45,13 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = True
+    PSEUDO_LABELLING = False
     LABELS_V2 = False
     LABELS_V3 = True
     # USE_SPECTROGRAMS = ['kaggle']
     USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v100', 'cwt_mexh_10sec_v100', 'cwt_mexh_20sec_last_v100']
     CREATE_SPECS = True
-    USE_ALL_LOW_QUALITY = True
+    USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
 
 class CFG:
