@@ -45,9 +45,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = False
-    LABELS_V2 = False
-    LABELS_V3 = True
+    PSEUDO_LABELLING = True
     # USE_SPECTROGRAMS = ['kaggle']
     USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v100', 'cwt_mexh_10sec_v100', 'cwt_mexh_20sec_last_v100']
     CREATE_SPECS = True
@@ -474,11 +472,12 @@ class Runner():
             targets_oof = [f"{c}_oof" for c in TARGETS]
             # pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
             # pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
-            train = pd.read_csv(ROOT_PATH + '/data/rqlblvo_train_oof.csv')
+            train = pd.read_csv(ROOT_PATH + '/data/uaktmjv_train_oof.csv')
             pseudo_labels = train.loc[train['total_evaluators']<10.0, targets_oof]
             train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
 
         self.train = train
+        logger.info(f'train shape: {self.train.shape}')
 
     def load_spectrograms(self, ):
         self.all_spectrograms = {}
@@ -499,6 +498,7 @@ class Runner():
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
         train_2nd = self.train[self.train['stage']==2]
+        logger.info(f'train_2nd shape: {train_2nd.shape}')
         
         for fold_id in fold_lists:
 
