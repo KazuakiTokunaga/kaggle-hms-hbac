@@ -47,7 +47,7 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = True
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v100', 'cwt_mexh_10sec_v100', 'cwt_mexh_20sec_last_v100']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v105', 'cwt_mexh_10sec_v105', 'cwt_mexh_20sec_last_v105']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
@@ -176,17 +176,17 @@ class HMSDataset(Dataset):
         # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_v100'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v100'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_last_v100'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
@@ -472,7 +472,7 @@ class Runner():
             targets_oof = [f"{c}_oof" for c in TARGETS]
             # pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
             # pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
-            train = pd.read_csv(ROOT_PATH + '/data/uaktmjv_train_oof.csv')
+            train = pd.read_csv(ROOT_PATH + '/data/smkimta_train_oof.csv')
             pseudo_labels = train.loc[train['total_evaluators']<10.0, targets_oof]
             train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
 
