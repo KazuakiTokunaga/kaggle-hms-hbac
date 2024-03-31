@@ -54,11 +54,11 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b2'
+    MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
-    BATCH_SIZE = 24
+    BATCH_SIZE = 32
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
