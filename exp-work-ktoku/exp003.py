@@ -775,6 +775,8 @@ class Runner():
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
         
+        del all_infer_spectrograms
+        gc.collect()
 
     def main(self):
         self.load_dataset()
