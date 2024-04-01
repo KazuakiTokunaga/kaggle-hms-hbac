@@ -47,18 +47,18 @@ class RCFG:
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
     PSEUDO_LABELLING = False
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v105', 'cwt_mexh_10sec_v105', 'cwt_mexh_20sec_last_v105']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v108', 'cwt_cmor_10sec_v108', 'cwt_cmor_20sec_last_v108']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b4'
+    MODEL_NAME = 'efficientnet_b2'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
-    BATCH_SIZE = 12 # 24, 32
+    BATCH_SIZE = 24, # 12, 24, 32
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
@@ -168,17 +168,17 @@ class HMSDataset(Dataset):
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cmor_20sec_v108'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_10sec_v108'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_20sec_last_v108'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
