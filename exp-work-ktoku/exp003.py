@@ -54,7 +54,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b2'
+    MODEL_NAME = 'efficientnet_b0'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
