@@ -492,7 +492,7 @@ class Runner():
             sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
-                sgkf.split(train, y=train["target"], groups=train["patient_id"])
+                sgkf.split(train, y=train["target"], groups=train["eeg_id_original"])
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
