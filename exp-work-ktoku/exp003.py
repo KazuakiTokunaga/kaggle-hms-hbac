@@ -54,7 +54,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
+    MODEL_NAME = 'resnet152d'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -233,7 +233,7 @@ class HMSModel(nn.Module):
 
         # Baseline
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-        self.base_model.classifier = self.fc
+        # self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
@@ -492,7 +492,7 @@ class Runner():
             sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
-                sgkf.split(train, y=train["target"], groups=train["eeg_id_original"])
+                sgkf.split(train, y=train["target"], groups=train["patient_id"])
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
