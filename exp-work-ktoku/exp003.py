@@ -54,7 +54,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet152d'
+    MODEL_NAME = 'resnet101d'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
