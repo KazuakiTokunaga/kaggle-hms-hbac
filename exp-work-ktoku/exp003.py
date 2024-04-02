@@ -54,7 +54,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet101d'
+    MODEL_NAME = 'resnet152d'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -220,8 +220,8 @@ class GeM(nn.Module):
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
 
         # conv2d
         # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
