@@ -58,7 +58,7 @@ class CFG:
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
-    BATCH_SIZE = 32 # 12, 24, 32
+    BATCH_SIZE = 24 # 12, 24, 32
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
