@@ -54,7 +54,7 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'resnet101d'
+    MODEL_NAME = 'efficientnet_b2'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
@@ -220,8 +220,8 @@ class GeM(nn.Module):
 class HMSModel(nn.Module):
     def __init__(self, pretrained=True, num_classes=6):
         super(HMSModel, self).__init__()
-        # in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
-        # self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
+        in_features = EFFICIENTNET_SIZE[CFG.MODEL_NAME]
+        self.fc = nn.Linear(in_features=in_features, out_features=num_classes)
 
         # conv2d
         # self.conv2d = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=3, stride=1, padding=0)
@@ -233,7 +233,7 @@ class HMSModel(nn.Module):
 
         # Baseline
         self.base_model = timm.create_model(CFG.MODEL_NAME, pretrained=pretrained, num_classes=num_classes, in_chans=CFG.IN_CHANS)
-        # self.base_model.classifier = self.fc
+        self.base_model.classifier = self.fc
 
     def forward(self, x):
         x = x.repeat(1, 1, 1, 3) 
@@ -457,7 +457,8 @@ class Runner():
         train_2nd = pd.concat([train_high, train_both] ).reset_index(drop=True)
         train_2nd_other = train_2nd[train_2nd['target'] == 'Other'].copy()
         patient_id_list = train_2nd_other['patient_id'].unique()
-        patient_id_list_updated = np.random.choice(patient_id_list, len(patient_id_list)-300, replace=False)
+        rng = np.random.default_rng(451)
+        patient_id_list_updated = rng.choice(patient_id_list, len(patient_id_list)-300, replace=False)
 
         # 300人を1stに移す
         train_1st_other = train_2nd_other[~train_2nd_other['patient_id'].isin(patient_id_list_updated)].copy()
@@ -489,7 +490,7 @@ class Runner():
             train = train.merge(df_patient_id_fold, on='patient_id', how='left')
             train.loc[train['fold'].isnull(), 'fold'] = -1
         else:
-            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=77)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
                 sgkf.split(train, y=train["target"], groups=train["patient_id"])
