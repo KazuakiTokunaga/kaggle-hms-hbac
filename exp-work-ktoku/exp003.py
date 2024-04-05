@@ -174,9 +174,9 @@ class HMSDataset(Dataset):
 
         x_tmp = np.zeros((192, 512, 4), dtype='float32')
         for k in range(4):
-            img1_t = img1[:, :, k:k+1]
-            img2_t = img2[:, :, k:k+1]
-            img3_t = img3[:, :, k:k+1]
+            img1_t = img1[:, :, k]
+            img2_t = img2[:, :, k]
+            img3_t = img3[:, :, k]
             x_tmp[:, :, k] = np.concatenate([img1_t, img2_t, img3_t], axis=0)
         x_tmp = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (768, 512, 1)
         x_tmp = x_tmp.transpose(1, 0, 2) # (512, 768, 1)
