@@ -45,7 +45,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = True
+    PSEUDO_LABELLING = False
     # USE_SPECTROGRAMS = ['kaggle']
     USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v105', 'cwt_mexh_10sec_v105', 'cwt_mexh_20sec_last_v105']
     CREATE_SPECS = True
@@ -168,21 +168,20 @@ class HMSDataset(Dataset):
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
+        img1 = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
+        img2 = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
+        img3 = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
+        x_tmp = np.zeros((192, 512, 4), dtype='float32')
+        for k in range(4):
+            img1_t = img1[:, :, k:k+1]
+            img2_t = img2[:, :, k:k+1]
+            img3_t = img3[:, :, k:k+1]
+            x_tmp[:, :, k] = np.concatenate([img1_t, img2_t, img3_t], axis=0)
+        x_tmp = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (768, 512, 1)
+        x_tmp = x_tmp.transpose(1, 0, 2) # (512, 768, 1)
 
-        # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
-        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
-
-        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x_tmp], axis=1) # (512, 1024, 1)
 
         return X, y # (), (6)
         # return x1, y
