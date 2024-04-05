@@ -512,9 +512,10 @@ class Runner():
             logger.info('Load pseudo labelling data.')
             train = pd.read_csv(ROOT_PATH + '/data/tbgepcf_train_oof.csv')
             targets_oof = [f"{c}_oof" for c in TARGETS]
-            pseudo_labels = train.loc[train['total_evaluators']<10.0, targets_oof].values
-            current_value = train.loc[pseudo_labels.index, TARGETS].values
-            train.loc[pseudo_labels.index, TARGETS] = (current_value + pseudo_labels) / 2.0
+            cond = train['total_evaluators']<10.0
+            pseudo_labels = train.loc[cond, targets_oof].values
+            current_value = train.loc[cond, TARGETS].values
+            train.loc[cond, TARGETS] = (current_value + pseudo_labels) / 2.0
 
         self.train = train
 
