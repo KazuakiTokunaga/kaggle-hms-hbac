@@ -54,11 +54,11 @@ class RCFG:
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b2'
+    MODEL_NAME = 'efficientnet_b3'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
-    BATCH_SIZE = 24 # 12, 24, 32
+    BATCH_SIZE = 18 # 12, 24, 32
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
@@ -73,6 +73,7 @@ TARS2 = {x:y for y,x in TARS.items()}
 EFFICIENTNET_SIZE = {
     "efficientnet_b0": 1280, 
     "efficientnet_b2": 1408, 
+    "efficientnet_b3": 1536, 
     "efficientnet_b4": 1792, 
     "efficientnet_b5": 2048, 
     "efficientnet_b6": 2304, 
