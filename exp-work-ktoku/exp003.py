@@ -45,7 +45,7 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = False
+    PSEUDO_LABELLING = True
     # USE_SPECTROGRAMS = ['kaggle']
     USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v105', 'cwt_mexh_10sec_v105', 'cwt_mexh_20sec_last_v105']
     CREATE_SPECS = True
@@ -530,7 +530,7 @@ class Runner():
 
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
-            train = pd.read_csv(ROOT_PATH + '/data/swalweq_train_oof.csv')
+            train = pd.read_csv(ROOT_PATH + '/data/scjticx_train_oof.csv')
             targets_oof = [f"{c}_oof" for c in TARGETS]
             cond = train['total_evaluators']<10.0
             pseudo_labels = train.loc[cond, targets_oof].values
