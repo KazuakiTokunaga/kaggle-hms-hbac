@@ -477,7 +477,7 @@ class Runner():
         train_2nd = pd.concat([train_high, train_both] ).reset_index(drop=True)
         train_2nd_other = train_2nd[train_2nd['target'] == 'Other'].copy()
         patient_id_list = train_2nd_other['patient_id'].unique()
-        rng = np.random.default_rng(63)
+        rng = np.random.default_rng(87)
         patient_id_list_updated = rng.choice(patient_id_list, len(patient_id_list)-300, replace=False)
 
         # 300人を1stに移す
@@ -510,7 +510,7 @@ class Runner():
             train = train.merge(df_patient_id_fold, on='patient_id', how='left')
             train.loc[train['fold'].isnull(), 'fold'] = -1
         else:
-            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=80)
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=3)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
                 sgkf.split(train, y=train["target"], groups=train["patient_id"])
