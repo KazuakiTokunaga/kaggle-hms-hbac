@@ -510,7 +510,7 @@ class Runner():
             train = train.merge(df_patient_id_fold, on='patient_id', how='left')
             train.loc[train['fold'].isnull(), 'fold'] = -1
         else:
-            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=66)
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=80)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
                 sgkf.split(train, y=train["target"], groups=train["patient_id"])
