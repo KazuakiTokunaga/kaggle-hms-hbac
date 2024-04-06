@@ -165,24 +165,43 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
-        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
-        x1 = x1.transpose(1, 0, 2) # (256, 512, 1)
+        # x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # x1 = x1.transpose(1, 0, 2) # (256, 512, 1)
 
-         # (64, 512, 4)型
+        #  # (64, 512, 4)型
+        # img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
+        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
+        # x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # x12 = np.concatenate([x1, x2], axis=1) # (256, 1024, 1)
+        # x34 = np.concatenate([x3, x4], axis=1) # (256, 1024, 1)
+        # X = np.concatenate([x12, x34], axis=0) # (512, 1024, 1)
+
+        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+
+        # (64, 512, 4)型
         img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
-        x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
         img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
-        x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
         img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
-        x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+        x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        x12 = np.concatenate([x1, x2], axis=1) # (256, 1024, 1)
-        x34 = np.concatenate([x3, x4], axis=1) # (256, 1024, 1)
-        X = np.concatenate([x12, x34], axis=0) # (512, 1024, 1)
+        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 1024, 1)
 
         return X, y # (), (6)
         # return x1, y
