@@ -165,7 +165,8 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
-        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0).T # (256, 512, 1)
+        x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        x1 = x1.transpose(1, 0, 2) # (256, 512, 1)
 
          # (64, 512, 4)型
         img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
