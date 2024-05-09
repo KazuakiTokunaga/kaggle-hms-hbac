@@ -97,7 +97,7 @@ def save_model_as_kaggle_dataset(self, title, dir):
     subprocess.call(f'kaggle datasets version -r zip -p {dir} -m "Updateddata"'.split())
 
 
-def set_random_seed(seed: int = 42, deterministic: bool = False):
+def set_random_seed(seed: int = 99, deterministic: bool = False):
     """Set seeds"""
     random.seed(seed)
     np.random.seed(seed)

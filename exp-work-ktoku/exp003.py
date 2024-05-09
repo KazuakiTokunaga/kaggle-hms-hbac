@@ -45,20 +45,20 @@ class RCFG:
     USE_FOLD = [] # 空のときは全fold、0-4で指定したfoldのみを使う
     SAVE_TO_SHEET = True
     SHEET_KEY = '1Wcg2EvlDgjo0nC-qbHma1LSEAY_OlS50mJ-yI4QI-yg'
-    PSEUDO_LABELLING = True
+    PSEUDO_LABELLING = False
     # USE_SPECTROGRAMS = ['kaggle']
-    USE_SPECTROGRAMS = ['kaggle', 'cwt_mexh_20sec_v105', 'cwt_mexh_10sec_v105', 'cwt_mexh_20sec_last_v105']
+    USE_SPECTROGRAMS = ['kaggle', 'cwt_cmor_20sec_v108', 'cwt_cmor_10sec_v108', 'cwt_cmor_20sec_last_v108']
     CREATE_SPECS = True
     USE_ALL_LOW_QUALITY = False
     ADD_MIXUP_DATA = False
 
 class CFG:
     """モデルに関連する設定"""
-    MODEL_NAME = 'efficientnet_b0'
+    MODEL_NAME = 'efficientnet_b3'
     IN_CHANS = 3
     EPOCHS = 3
     N_SPLITS = 5
-    BATCH_SIZE = 32
+    BATCH_SIZE = 20 # 12, 24, 32
     AUGMENT = False
     EARLY_STOPPING = -1
     TWO_STAGE_THRESHOLD = 10.0 # 2nd stageのデータとして使うためのtotal_evaluatorsの閾値
@@ -73,6 +73,7 @@ TARS2 = {x:y for y,x in TARS.items()}
 EFFICIENTNET_SIZE = {
     "efficientnet_b0": 1280, 
     "efficientnet_b2": 1408, 
+    "efficientnet_b3": 1536, 
     "efficientnet_b4": 1792, 
     "efficientnet_b5": 2048, 
     "efficientnet_b6": 2304, 
@@ -165,32 +166,43 @@ class HMSDataset(Dataset):
             img_t = img[r:r+300,k*100:(k+1)*100].T
             x_tmp[14:-14,:,k] = img_t[:,22:-22]
 
+        # x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
+        # x1 = x1.transpose(1, 0, 2) # (256, 512, 1)
+
+        #  # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_20sec_v108'][row.eeg_id] # (64, 512, 4)
+        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_10sec_v108'][row.eeg_id] # (64, 512, 4))
+        # x3 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # # (64, 512, 4)型
+        # img = self.specs['cwt_cmor_20sec_last_v108'][row.eeg_id] # (64, 512, 4))
+        # x4 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
+
+        # x12 = np.concatenate([x1, x2], axis=1) # (256, 1024, 1)
+        # x34 = np.concatenate([x3, x4], axis=1) # (256, 1024, 1)
+        # X = np.concatenate([x12, x34], axis=0) # (512, 1024, 1)
+
         x1 = np.concatenate([x_tmp[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
 
-        # # v11
-        # img = self.specs['cwt_v11'][row.eeg_id] # (64, 512, 4)
-        # img = standardize_img(img)
-        # img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
-        # x2 = img.transpose(1, 0, 2) # (512, 256, 1)
-        # img = np.vstack((img[:, :256, :], img[:, 256:, :])) # (64, 512, 4) -> (128, 256, 4)に変換
-        # x2 = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (512, 256, 1)
-
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_v105'][row.eeg_id] # (64, 512, 4)
+        img = self.specs['cwt_cmor_20sec_v108'][row.eeg_id] # (64, 512, 4)
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x2 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_10sec_v105'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_10sec_v108'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x3 = img.transpose(1, 0, 2) # (512, 256, 1)
 
         # (64, 512, 4)型
-        img = self.specs['cwt_mexh_20sec_last_v105'][row.eeg_id] # (64, 512, 4))
+        img = self.specs['cwt_cmor_20sec_last_v108'][row.eeg_id] # (64, 512, 4))
         img = np.concatenate([img[:, :, i:i+1] for i in range(4)], axis=0) # (256, 512, 1)
         x4 = img.transpose(1, 0, 2) # (512, 256, 1)
 
-        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 768, 1)
+        X = np.concatenate([x1, x2, x3, x4], axis=1) # (512, 1024, 1)
 
         return X, y # (), (6)
         # return x1, y
@@ -387,6 +399,13 @@ class Runner():
         df = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/train.csv')
         df['total_evaluators'] = df[['seizure_vote', 'lpd_vote', 'gpd_vote', 'lrda_vote', 'grda_vote', 'other_vote']].sum(axis=1)
 
+        def string_to_11_digit_hash(input_string):
+            hash_object = hashlib.sha256(input_string.encode())
+            hex_dig = hash_object.hexdigest()
+            hash_int = int(hex_dig, 16)
+            hash_11_digit = hash_int % (10**11)
+            return hash_11_digit
+
         def get_train_df(df_tmp):
             train = df_tmp.groupby('eeg_id').agg(
                 spectrogram_id= ('spectrogram_id','first'),
@@ -407,33 +426,58 @@ class Runner():
             y_data = train[TARGETS].values
             y_data = y_data / y_data.sum(axis=1,keepdims=True)
             train[TARGETS] = y_data
-            
-            train['spec_offset_second'] = (train['max'] + train['min']) // 2 
-            train['eeg_offset_second'] = (train['eeg_max'] + train['eeg_min']) // 2
-            train['stage'] = train['total_evaluators'].apply(lambda x: 2 if x >= 10.0 else 1)
+            train['eeg_id_original'] = train['eeg_id'].copy()
+            train['stage'] = 1
+
             return train
 
+        def get_train_df_high(df_tmp):
+
+            train = df_tmp.groupby(['eeg_id']+TARGETS).agg(
+                spectrogram_id= ('spectrogram_id','first'),
+                min = ('spectrogram_label_offset_seconds','min'),
+                max = ('spectrogram_label_offset_seconds','max'),
+                eeg_min = ('eeg_label_offset_seconds','min'),
+                eeg_max = ('eeg_label_offset_seconds','max'),
+                patient_id = ('patient_id','first'),
+                total_evaluators = ('total_evaluators','mean'),
+                target = ('expert_consensus','first')
+            ).reset_index()
+
+            train['eeg_id_rank'] = train.groupby('eeg_id')['eeg_id'].cumcount()+1
+            train['eeg_id_original'] = train['eeg_id'].copy()
+            train['eeg_id'] = (train['eeg_id_original'] + train['eeg_id_rank']).apply(lambda x: string_to_11_digit_hash(str(x)))
+
+            y_data = train[TARGETS].values
+            y_data = y_data / y_data.sum(axis=1,keepdims=True)
+            train[TARGETS] = y_data
+            train['stage'] = 2
+
+            return train.drop(['eeg_id_rank'], axis=1)
+
+        logger.info('Create labels considering 2nd stage learning.')
         eeg_low = df[df['total_evaluators']<10]['eeg_id'].unique()
         eeg_high = df[df['total_evaluators']>=10]['eeg_id'].unique()
         eeg_both = [eeg_id for eeg_id in eeg_high if eeg_id in eeg_low]
 
         # low, highについてはそれぞれ集計
-        df_not_both = df[~df['eeg_id'].isin(eeg_both)].copy()
-        train_not_both = get_train_df(df_not_both)
+        df_low = df[(df['eeg_id'].isin(eeg_low))&(~df['eeg_id'].isin(eeg_both))].copy()
+        train_low = get_train_df(df_low)
+
+        df_high = df[(df['eeg_id'].isin(eeg_high))&(~df['eeg_id'].isin(eeg_both))].copy()
+        train_high = get_train_df_high(df_high)
 
         # 両方に含まれるeeg_idについては、total_evaluatorsが10以上のもののみを集計
         df_both = df[df['eeg_id'].isin(eeg_both)].copy()
         df_both = df_both[df_both['total_evaluators']>=10]
-        train_both = get_train_df(df_both)
+        train_both = get_train_df_high(df_both)
 
-        train = pd.concat([train_not_both, train_both]).reset_index(drop=True)
-
-        # Otherを1stに移す処理
-        train_1st = train[train['total_evaluators']<10].copy()
-        train_2nd = train[train['total_evaluators']>=10].copy()
+        # Otherについて、patient_id 300人分を無作為に削除する
+        # 無作為抽出を行う
+        train_2nd = pd.concat([train_high, train_both] ).reset_index(drop=True)
         train_2nd_other = train_2nd[train_2nd['target'] == 'Other'].copy()
         patient_id_list = train_2nd_other['patient_id'].unique()
-        rng = np.random.default_rng(4946)
+        rng = np.random.default_rng(87)
         patient_id_list_updated = rng.choice(patient_id_list, len(patient_id_list)-300, replace=False)
 
         # 300人を1stに移す
@@ -444,7 +488,13 @@ class Runner():
         train_2nd = pd.concat([train_2nd_other, train_2nd_iiic]).reset_index(drop=True)
 
         # カラムの順番を揃える
-        train = pd.concat([train_1st, train_1st_other, train_2nd]).reset_index(drop=True)
+        columns = train_low.columns
+        train_1st_other = train_1st_other[columns]
+        train_2nd = train_2nd[columns]
+
+        train = pd.concat([train_low, train_1st_other, train_2nd]).reset_index(drop=True)
+        train['spec_offset_second'] = (train['max'] + train['min']) // 2 
+        train['eeg_offset_second'] = (train['eeg_max'] + train['eeg_min']) // 2
 
         # Create Fold
         if RCFG.USE_ALL_LOW_QUALITY:
@@ -460,24 +510,34 @@ class Runner():
             train = train.merge(df_patient_id_fold, on='patient_id', how='left')
             train.loc[train['fold'].isnull(), 'fold'] = -1
         else:
-            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=34)
+            sgkf = StratifiedGroupKFold(n_splits=CFG.N_SPLITS, shuffle=True, random_state=3)
             train["fold"] = -1
             for fold_id, (_, val_idx) in enumerate(
                 sgkf.split(train, y=train["target"], groups=train["patient_id"])
             ):
                 train.loc[val_idx, "fold"] = fold_id
 
+        if RCFG.ADD_MIXUP_DATA:
+            logger.info('Add external data.')
+            mixup_data = pd.read_csv(ROOT_PATH + '/input/hms-harmful-brain-activity-classification/df_mixup_v2.csv')
+            mixup_data = mixup_data[train.columns]
+            mixup_data['target'] = 'Ext'
+            if RCFG.DEBUG:
+                mixup_data = mixup_data.iloc[:100]
+
+            train = pd.concat([train, mixup_data]).reset_index()
+            logger.info(f'Train shape after adding external data: {train.shape}')
+
         if RCFG.PSEUDO_LABELLING:
             logger.info('Load pseudo labelling data.')
+            train = pd.read_csv(ROOT_PATH + '/data/scjticx_train_oof.csv')
             targets_oof = [f"{c}_oof" for c in TARGETS]
-            # pseudo = pd.read_csv(ROOT_PATH + '/data/naeevjg_train_oof.csv')
-            # pseudo_labels = pseudo.loc[pseudo['total_evaluators']<10.0, targets_oof]
-            train = pd.read_csv(ROOT_PATH + '/data/smkimta_train_oof.csv')
-            pseudo_labels = train.loc[train['total_evaluators']<10.0, targets_oof]
-            train.loc[pseudo_labels.index, TARGETS] = pseudo_labels.values
+            cond = train['total_evaluators']<10.0
+            pseudo_labels = train.loc[cond, targets_oof].values
+            # current_value = train.loc[cond, TARGETS].values
+            train.loc[cond, TARGETS] = pseudo_labels
 
         self.train = train
-        logger.info(f'train shape: {self.train.shape}')
 
     def load_spectrograms(self, ):
         self.all_spectrograms = {}
@@ -498,7 +558,6 @@ class Runner():
 
         fold_lists = RCFG.USE_FOLD if len(RCFG.USE_FOLD) > 0 else list(range(CFG.N_SPLITS))
         train_2nd = self.train[self.train['stage']==2]
-        logger.info(f'train_2nd shape: {train_2nd.shape}')
         
         for fold_id in fold_lists:
 
@@ -739,6 +798,8 @@ class Runner():
         self.sub[TARGETS] = predictions
         self.sub.to_csv('submission.csv',index=False)
         
+        del all_infer_spectrograms
+        gc.collect()
 
     def main(self):
         self.load_dataset()
